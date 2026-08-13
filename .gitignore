@@ -1,0 +1,14 @@
+# environments & caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+
+# secrets — never committed
+.env
+
+# transient run output (curated runs are copied into evidence/, which IS tracked)
+runs/

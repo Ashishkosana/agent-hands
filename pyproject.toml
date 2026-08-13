@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hands"
+version = "0.1.0"
+description = "Record-once / replay-many computer-use automation: an LLM discovers a UI flow once; a typed capability artifact replays it deterministically with no model in the loop."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+authors = [{ name = "Ashish Kosana", email = "ashishkosana@gmail.com" }]
+dependencies = [
+    "playwright>=1.49",
+    "pydantic>=2.10",
+    "anthropic>=0.42",
+    "flask>=3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+
+[project.scripts]
+hands = "hands.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hands"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+mypy_path = "src"
+packages = ["hands"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

@@ -4,6 +4,16 @@
 distilled into a typed, versioned **capability artifact**; production invocations
 *replay* that artifact deterministically, with no model in the decision loop.
 
+Five invariants the whole design serves:
+
+1. **Never guess.** Ambiguity at replay is a failure, not a heuristic.
+2. **Wrong-but-confident is the worst outcome.** Uniqueness is not correctness;
+   every match and every extracted value is verified against recorded expectations.
+3. **A business outcome is an answer, not an error.** The result contract is
+   three-way and the caller can enumerate every code it may receive.
+4. **Irreversible actions are never auto-retried and never replayed unreviewed.**
+5. **Replay sends nothing to any model, ever** — proven hermetically, not asserted.
+
 ## Architecture
 
 ```
@@ -11,45 +21,30 @@ distilled into a typed, versioned **capability artifact**; production invocation
 ┌───────────────────────────────────────┐    ┌──────────────────────────────────────┐
 │ goal template + example params        │    │ capability.json + invocation params  │
 │   ↓                                   │    │   ↓                                  │
-│ Planner (LLM, tool-forced actions)    │    │ Replay engine                        │
-│   ↑ observation          action ↓     │    │   check preconditions                │
-│   │                   Policy gate     │    │   resolve locator ladder             │
-│   │                        ↓          │    │   act, wait on postconditions        │
-│ Surface (Playwright, a11y tree) ──────┼──┐ │   poll condition recognizers         │
-│   ↓                                   │  │ │   verify checkpoint, extract outputs │
+│ Planner (LLM, tool-forced actions,    │    │ Replay engine                        │
+│   grounded by observation refs)       │    │   verify `requires`, then per step:  │
+│   ↑ observation          action ↓     │    │   preconditions → ladder → act loop  │
+│   │                   Policy gate     │    │   → wait on postconditions, polling  │
+│   │                        ↓          │    │     armed recognizers throughout     │
+│ Surface (Playwright, a11y tree) ──────┼──┐ │   verify checkpoint (param-bound)    │
+│   ↓                                   │  │ │   extract + validate typed outputs   │
 │ Recorder: trace → distill ────────────┼──┴►│   ↓                                  │
-└───────────────────────────────────────┘    │ SUCCESS | BUSINESS_OUTCOME | FAILURE │
+└───────────────────────────────────────┘    │ SUCCESS | OUTCOME | FAILURE          │
                                              └──────────────────────────────────────┘
-   shared by both paths:  Policy (allowlist, risk, redaction)
-                          Trace  (JSONL audit log + screenshots on failure)
+   shared by both paths:  Policy (network-layer allowlist, risk gates, redaction)
+                          Trace  (JSONL audit log + masked evidence on failure)
                           Escalation (pause → human on the SAME live session → resume)
 ```
 
-Components, each independently testable:
-
-- **Surface** — the perceive/act seam. `observe() -> Observation` (a normalized
-  accessibility-tree snapshot: role, name, state, frame path), `act(Action)`,
-  `screenshot()` (evidence only). One implementation: Playwright. This protocol is
-  the heterogeneity answer: a desktop surface implements the same contract over
-  OS accessibility APIs (UIA/AX); artifact and replay engine are unchanged.
-- **Planner** — Anthropic tool-use loop. The action tool's schema *forces* every
-  proposed action to be grounded in an element from the current observation and
-  expressed semantically (intent + role/name target). Stop conditions: `done`
-  (with checkpoint evidence), `stuck` (reason), max steps, timeout.
-- **Recorder** — keeps the full redacted transcript as evidence in `runs/`;
-  distills the artifact from the executed steps. Artifact ≠ transcript.
-- **Replay engine** — consumes only the artifact. Zero LLM imports, proven by test.
-- **Policy** — allowlist (hosts, action kinds), risk classes, redaction. Gates
-  *both* paths at the Surface, not just in prompts.
-- **Escalation** — control-token state machine + minimal operator console.
-- **Trace** — append-only JSONL per run; an auditor can replay the story.
+Components, each independently testable: **Surface** (perceive/act seam),
+**Planner** (LLM tool-use loop, Anthropic SDK), **Recorder** (trace → artifact),
+**Replay engine** (zero model dependency), **Policy**, **Escalation**, **Trace**.
 
 ## The capability artifact
 
-JSON on disk, Pydantic-modeled, diffable, reviewable. Two version fields:
-`schema_version` (artifact format) and `version` (capability revision). The
-parameter/output schema doubles as an agent-facing tool definition — a calling
-agent can discover what a capability needs and returns without reading its steps.
+JSON on disk, Pydantic-modeled, diffable, reviewable. The caller-facing contract
+is fully declared at the top level — parameters, outputs, **outcomes** — so an
+agent can invoke it blind; steps are implementation detail below that line.
 
 ```json
 {
@@ -57,150 +52,397 @@ agent can discover what a capability needs and returns without reading its steps
   "name": "lookup_member_balance",
   "version": 1,
   "description": "Look up a member by ID and read their savings balance.",
-  "target": { "app": "fairview-teller", "entry_url": "http://localhost:8000/",
-              "allowed_hosts": ["localhost:8000"] },
-  "parameters": { "member_id": { "type": "string", "sensitive": false, "example": "12345" } },
+  "target": { "app": "fairview-teller", "entry": { "web": { "url": "http://localhost:8000/" } } },
+  "requires": [ { "kind": "role_name_visible", "role": "heading", "name": "Teller Console" } ],
+  "parameters": { "member_id": {
+      "type": "string", "description": "Member number as printed on statements",
+      "sensitive": false, "example": "12345" } },
+  "outcomes": {
+      "MEMBER_NOT_FOUND":  { "description": "No member exists with this ID." },
+      "PERMISSION_DENIED": { "description": "The session's role may not view this member." } },
+  "outputs": { "savings_balance": {
+      "type": "decimal", "sensitive": true,
+      "parse": { "kind": "money", "locale": "en_US" },
+      "from": { "strategy": "relative", "anchor": { "strategy": "text", "text": "Savings" },
+                "relation": "cell_right" } } },
   "steps": [
     { "id": "s2", "intent": "Enter the member ID in the search field",
-      "action": { "kind": "type", "text": "{member_id}" },
+      "action": { "kind": "type", "text": "{param:member_id}" },
       "target": { "ladder": [
-        { "strategy": "role", "role": "textbox", "name": "Member ID", "frame": ["main"] },
-        { "strategy": "label", "text": "Member ID", "frame": ["main"] } ] },
+        { "strategy": "label", "text": "Member ID", "context": ["main"] },
+        { "strategy": "relative", "anchor": { "strategy": "text", "text": "Member ID" },
+          "relation": "nearest_input_right", "context": ["main"] } ],
+        "fingerprint": { "role": "textbox", "editable": true, "region": "search-form" } },
       "pre":  [ { "kind": "editable" } ],
-      "post": [ { "kind": "value_is", "value": "{member_id}" } ],
+      "post": [ { "kind": "value_matches_param", "param": "member_id", "normalize": "digits" } ],
       "risk": "safe" }
   ],
   "conditions": [
-    { "id": "not_found",
-      "match": { "kind": "text", "pattern": "No member matches", "where": "main" },
-      "classify": "business_outcome", "outcome_code": "MEMBER_NOT_FOUND" },
-    { "id": "session_expired",
+    { "id": "not_found", "armed_after": "s3",
+      "match": { "kind": "region_text", "region": "results", "patterns": ["No member matches"] },
+      "classify": "business_outcome", "outcome_code": "MEMBER_NOT_FOUND",
+      "provenance": "discovered", "verified_by_eval": true },
+    { "id": "session_expired", "armed_after": "s1",
       "match": { "kind": "role_name", "role": "dialog", "name": "Session expired" },
-      "classify": "recoverable", "recovery": [ /* bounded steps, e.g. click 'Continue' */ ] }
+      "classify": "recoverable", "resume": "retry_current_step",
+      "recovery": [ /* full step schema: ladder targets, risk labels, policy-gated */ ],
+      "max_fires_per_run": 2 }
   ],
-  "checkpoint": { "all": [ { "kind": "role_name_visible", "role": "heading", "name": "Member Details" } ] },
-  "outputs": { "savings_balance": { "type": "decimal",
-    "from": { "strategy": "relative", "anchor": { "strategy": "text", "text": "Savings" },
-              "relation": "cell_right" } } }
+  "checkpoint": { "all": [
+      { "kind": "role_name_visible", "role": "heading", "name": "Member Details" },
+      { "kind": "region_text_matches_param", "region": "member-header", "param": "member_id" } ] },
+  "risk_review": { "reviewed_by": null, "artifact_hash": null }
 }
 ```
 
-**Locator ladder** (ordered; a rung must resolve to *exactly one* element or the
-next rung is tried; exhaustion or ambiguity is a hard failure — never a guess):
+Schema decisions an interviewer will probe, answered:
 
-1. `role` + accessible name, scoped by frame path — what a human operator sees;
-   computed by the browser even on legacy markup with no ARIA and no test IDs;
-   the same abstraction desktop accessibility APIs expose.
-2. associated/adjacent `label` text (form controls).
-3. exact visible `text` (links/buttons).
-4. `relative` — position relative to an anchor found by 1–3 (e.g. "cell right of
-   cell containing 'Savings'") — how you read values out of table-soup.
-5. recorded CSS path, last resort only; using it emits a fragility warning in the
-   trace (this is also drift telemetry — see Tenancy).
+- **Outcome codes are top-level and closed.** Conditions reference them; the
+  loader validates closure (every `outcome_code` declared, every declared code
+  reachable). Return envelope: `SUCCESS{outputs} | OUTCOME{code, evidence} |
+  FAILURE{report}` — outputs present iff SUCCESS.
+- **The checkpoint must bind identity.** Checkpoint conditions accept `{param}`
+  references; publish-time validation warns loudly if a capability with
+  identifying parameters has a checkpoint that references none of them.
+  "Member Details is visible" proves you reached *a* details page; only
+  "member-header matches `{member_id}`" proves it's the right one. Output
+  extraction anchors inside the identity-verified region.
+- **Conditions are scoped, structural, and provenance-tracked.** Each is armed
+  for a step range (`armed_after`), matches against a named region or role —
+  never bare text anywhere in the page — and records where it came from
+  (`discovered` | `authored`) plus whether an eval has exercised it. A stale
+  or incidental text match returning a confident wrong answer is the failure
+  class this schema exists to prevent.
+- **Typed outputs carry parse specs.** `"decimal"` alone can't turn "$1,234.50"
+  (or "(1,234.50)", or a European tenant's "1.234,50") into a number
+  deterministically. A named parser + locale does; the tenant overlay can
+  override locale. A parse failure is a FAILURE, never a value.
+- **Version semantics:** a change to parameters, outputs, or outcome codes is a
+  contract change and bumps `version` (callers pin `name@version`); step/ladder
+  edits are revisions within it. Every trace logs the hash of the effective
+  artifact (base + overlay) that actually ran.
+- **`requires`** declares session/state preconditions (auth, entry state) in the
+  same condition language, checked before step 1. Unmet → `PRECONDITION_FAILED`,
+  a distinct result — not a misleading locator failure on a login page.
+
+## Locator ladder
+
+Ordered strategies per target; semantics pinned in `schema_version`: matching is
+exact (whitespace-normalized), uniqueness is counted over **visible** elements
+only, and **0 matches → next rung; >1 matches → hard failure** (lower rungs are
+less specific — they are fallbacks, not disambiguators).
+
+1. **role + accessible name**, scoped by context path — reliable for buttons,
+   links, and text-bearing cells. *Honest limit:* a bare `<input>` in a table
+   cell has an **empty** accessible name; roles are always computed, names are
+   not. On legacy form controls the ladder lives on rungs 2–4.
+2. **label** — real label association where it exists, plus a custom proximity
+   resolver (same row / preceding cell / nearest preceding text) computed over
+   the observation tree, since legacy markup rarely has `<label for>`.
+3. exact visible **text** (links/buttons).
+4. **relative** — geometric relation to an anchor found by 1–3 ("nearest input
+   right of 'Member ID'", "cell right of 'Savings'"). Defined geometrically
+   (bounding boxes are in the observation), not by DOM traversal — that is what
+   makes it both table-soup-proof and desktop-portable.
+5. recorded **CSS** path, web-only, last resort: use emits a fragility warning
+   into drift telemetry, and the rung is **disabled entirely when the replay
+   tenant differs from the recording tenant** (a positional path on a different
+   DOM resolves *uniquely to the wrong element* — uniqueness is not correctness).
+
+Every target also records a **fingerprint** (expected role, editability, coarse
+region) captured at distillation; the resolved element is verified against it on
+every replay — mismatch is a warning on safe steps, a hard failure on risky ones.
+At distillation, every rung is round-tripped through the same locator engine
+replay uses, against the record-time page; a rung that can't round-trip is a
+distillation error, not a latent replay bug. Observation and resolution share
+one role-computation engine (Chromium's native accessibility tree demotes layout
+tables; Playwright's role engine follows HTML-AAM — mixing them would make
+discovery-grounded targets unresolvable at replay on exactly the markup we care
+about). Context paths are recorded as name + URL pattern + ordinal per segment
+and re-resolved from the page root on every poll — handles are never cached
+across polls, and a detached-frame error during a poll means "state changing,
+re-observe", not failure.
 
 ## Record path (discovery)
 
-Input: goal *template* + concrete example params (`"look up member {member_id}"`,
-`member_id=12345`). Loop: observe → model proposes a grounded action → policy
-gate → execute → repeat, until `done` / `stuck` / limits. Distillation then:
+Input: goal *template* + concrete example params. The observation presented to
+the planner lists elements with stable **refs**; the action tool schema forces
+every action to reference a ref plus intent — the model cannot act on anything
+it can't point to. Loop: observe → propose → policy gate → execute → repeat,
+until `done(checkpoint_evidence)`, **`outcome(code, evidence)`** (a legitimate
+non-success ending — "no such member" is an answer at discovery time too),
+`stuck(reason)`, or limits. Ambiguity is negotiable at discovery (the planner
+disambiguates; the recorder captures the disambiguation as a relative rung) and
+fatal at replay.
 
-- replaces exact occurrences of param values in typed text with placeholders
-  (an ambiguous or absent match is a distillation error surfaced to the human,
-  not a silent guess);
-- attaches per-step pre/postconditions from what was actually observed;
-- takes the checkpoint from the `done` call's evidence;
-- marks per-step risk (planner classification + policy keyword rules).
+Distillation (every replacement is listed for human confirmation):
+
+- **Parameter substitution over a closed set of slots** — typed text, select
+  values, target names/anchor text on every rung, condition patterns,
+  checkpoint and postcondition values. Whole-slot or token-boundary matches
+  only, longest value first. A target whose accessible name derives from a
+  param ("12345 — Pat Ruiz") becomes a parameterized name or a structural
+  target; a param occurrence anywhere else is a distillation error.
+- **Data-independence check**: distilled conditions may only use stable page
+  chrome (headings, labels, buttons, URL patterns). Observed values that vary
+  with the example data — the member's name, a balance — are rejected from
+  conditions/checkpoints and belong only in declared outputs.
+- Pre/postconditions from observed state, with type-aware normalization
+  (UIs reformat: "1000" → "1,000.00"; normalized matches are flagged for
+  confirmation, not silently accepted).
+- Checkpoint from `done` evidence, subject to the identity-binding rule.
+- Risk marks (see Safety — the planner can only *raise* risk, never lower it).
+
+**Recognizer provenance:** a happy-path run never sees a not-found page, so
+recognizers can't come from it. They come from (a) additional short discovery
+runs per declared outcome — run discovery once with a member ID known not to
+exist; the terminal observation distills into the recognizer, param-substituted;
+(b) hand-authoring, in which case the condition carries `provenance: "authored"`
+and `verified_by_eval: false` until an eval scenario exercises it — the eval
+table reports verified vs unverified counts. The growth loop in production:
+every FAILURE on an unrecognized blocking state carries exactly the evidence a
+human needs to promote it into a recognizer or overlay entry.
+
+The full (redacted) transcript is evidence in `runs/`; the artifact is a
+contract. They never mix.
 
 ## Replay path (production)
 
-Input: artifact + params, validated against the parameter schema. Per step:
-check preconditions → resolve ladder → act → wait (bounded, no fixed sleeps) for
-postconditions, polling the artifact's condition recognizers throughout:
+Input: artifact + params, validated against the parameter schema; `requires`
+verified; then per step:
 
-- **business outcome** matched → stop, return `OUTCOME(code, evidence)` — an
-  answer, not an error;
-- **recoverable** matched → run its bounded recovery steps, continue; retries
-  are capped;
-- postcondition timeout / ladder exhausted / unrecognized blocking state →
-  `FAILURE(step, expected, observed, screenshot + a11y snapshot)` — or escalate
-  to a human if the run is attended.
+- **Two-level timeout model.** Playwright's own auto-waiting actions get short
+  per-attempt timeouts (1–2 s); the engine owns a per-step budget and runs the
+  act as a bounded retry loop, evaluating armed recognizers *before the first
+  attempt and between attempts* — a session-expiry dialog that appears between
+  steps is recognized and recovered, not smashed into a 30 s TimeoutError.
+- **Freshness and precedence.** Recognizers are evaluated only against state
+  proven fresh relative to the action (navigation observed, or pre-action state
+  seen gone) — a stale "No member matches" from the previous search cannot fire.
+  If a postcondition and a recognizer are simultaneously true, the postcondition
+  wins. Every OUTCOME carries the matched node's role/region context as
+  auditable evidence.
+- **Recovery semantics.** Recovery steps use the full step schema (ladders,
+  risk labels) and pass the same policy gate; recognizer matching is disabled
+  during recovery (one level, no nesting); each condition declares its resume
+  point (`retry_current_step` | `restart_from: k`) because "continue" is wrong
+  whenever recovery navigates; caps are per-condition-per-run; a failed or
+  exhausted recovery **promotes to FAILURE** naming the original condition.
+- **No double fire.** Irreversible steps are never auto-retried — on timeout
+  they escalate. Before *any* re-act, the engine probes for the action's effect
+  (current postconditions, then a forward scan of later steps' conditions and
+  the checkpoint); it re-acts only if the effect is provably absent. "Can your
+  system ever click Submit Transfer twice?" must be answered by structure, not
+  probability.
+- Native JS dialogs (`alert`/`confirm`) are invisible to the DOM and
+  auto-dismissed by Playwright unless handled: the Surface registers a dialog
+  handler and exposes them as a first-class condition kind artifacts can
+  classify; an unmatched native dialog is captured (message + screenshot),
+  deterministically dismissed, and classified FAILURE — or relayed to the
+  operator when attended.
 
-Checkpoint verified before outputs are extracted. **No LLM:** a test runs a full
-replay with no API key set and asserts the model client module is never imported.
+Checkpoint verified (identity-bound), outputs extracted from the verified
+region and validated against their parse spec.
+
+**Zero-LLM proof, hermetic:** the proof test runs a full replay in a fresh
+subprocess with no API keys in the environment and network egress blocked at the
+socket level except the fixture host, asserting success and zero model events in
+the trace. (An in-process "module never imported" check survives only as a
+labeled smoke test — it's name-brittle and order-dependent under pytest.) The
+egress block doubles as a test of the Policy allowlist, which enforces the same
+boundary in production.
 
 ## Failure taxonomy
 
-Three-way result contract (conflating these is the classic mistake here):
-
 | class | meaning | examples |
 |---|---|---|
-| `BUSINESS_OUTCOME` | a legitimate answer the caller needs | member not found, permission denied, validation rejected |
-| recoverable (internal) | handled, logged, never surfaced as failure | known interstitial, transient slow load, session-expiry continue |
-| `FAILURE` | stop loudly with a debuggable report | locator not found/ambiguous, postcondition timeout, unexpected dialog, app error |
+| `BUSINESS_OUTCOME` | a legitimate answer, declared in the contract | member not found, permission denied, validation rejected |
+| recoverable (internal) | handled, logged, capped; promotes to FAILURE on exhaustion | known interstitial, transient slow load, session-expiry continue |
+| `FAILURE` | stop loudly with a debuggable report | locator not found/ambiguous, fingerprint mismatch, postcondition timeout, unexpected/native dialog, parse failure, recovery exhaustion |
+| `PRECONDITION_FAILED` | the environment, not the flow | not authenticated, wrong entry state |
+| `POLICY_VIOLATION` | the guardrails, not the flow | off-allowlist navigation, unapproved irreversible step |
+
+FAILURE reports carry: step id, intent, expected (rendered human-readably),
+observed, and masked evidence (screenshot + a11y snapshot).
 
 ## Escalation & control transfer
 
-Triggers: planner `stuck` (discovery), unrecognized blocking state (replay),
-irreversible step awaiting approval. Mechanism: control-token state machine —
-`AUTOMATION → PAUSED → HUMAN → AUTOMATION`, single owner at all times; the
-engine checks ownership before every action. An intervention request (capability,
-step, reason, screenshot, run id) is written and served by a minimal local
-operator console: *Take control* / *Hand back*. The human drives the **same
-headed browser session**; injected listeners record their actions (redacted)
-into the trace. On hand-back the engine re-observes and re-verifies the current
-step's postconditions to decide: advance, retry, or fail.
+**Triggers:** planner `stuck` (discovery); unrecognized blocking state or
+irreversible step awaiting approval (replay); operator-initiated takeover.
+
+**Token protocol.** The token is engine-owned in-memory state. The operator
+console (an HTTP thread in the same process) never touches Playwright — the
+sync API is thread-affine — it only posts transition *requests*. The engine
+polls the request flag on every tick of its existing poll loop and at every
+step boundary; on a pending pause it parks, discarding any in-flight wait's
+result. The console shows control as granted only after the engine acknowledges
+parking — acknowledgment latency is bounded by one poll interval. Two drivers
+on one session is structurally impossible, not discouraged.
+
+**State machine:** `AUTOMATION → PAUSED → {HUMAN | AUTOMATION(approve) |
+FAILED(deny/TTL)}`; `HUMAN → {AUTOMATION(hand back) | ABORTED(reason) |
+RESOLVED(outcome_code, note)}`. The human can approve an irreversible step
+without taking over, abort a run they judge unsafe, or resolve it as a business
+outcome they established manually — with attribution. An unanswered
+intervention has a TTL: on expiry the run fails carrying the intervention
+context, and the browser session is closed (no keep-alive games with a banking
+session). Every transition records the operator identity string.
+
+**Intervention request** carries: capability + version, step id and intent,
+non-sensitive resolved params, why it stopped, the step's postconditions
+rendered as "when done, the page should show…", the last N trace events, a
+masked screenshot, and remaining steps. Sensitive values are never displayed;
+credential steps are performed by the operator with their own credentials.
+
+**Human-action capture** is installed once at context creation
+(`add_init_script` + `expose_binding`, re-injected per document and frame —
+listeners injected at takeover time die on the first navigation), dormant
+except in HUMAN state. It records **semantic targets only, never values** —
+"typed 12 chars (masked) into textbox 'Password' in frame main" — for *every*
+field, because on legacy surfaces SSNs live in plain-text inputs and no
+heuristic finds them all. Browser-level events (navigation, popup, download,
+new tab) are captured via Playwright events; on hand-back, if the active page
+differs from the engine's handle, the engine adopts it explicitly or fails with
+a clear report. All screenshots during the HUMAN window are suppressed. JS
+dialogs during HUMAN state are relayed to the console with Accept/Dismiss
+buttons (Playwright intercepts them; the human cannot click a native dialog on
+a driven page — a known constraint, handled, not discovered in the demo).
+Human data entry is evidence, not a replayable macro: if the workaround should
+become automation, discovery re-runs through that path. During discovery, the
+token gates the whole loop iteration (observe + LLM call + act), captured human
+steps distill into artifact steps flagged `origin: "human"` that force review
+before the artifact is accepted, and on resume the planner's transcript gets a
+synthetic message: "a human intervened, performed X, current observation is Y."
+
+**Resume is a forward scan, not a single-step check.** The common case is a
+human who finishes the screen they're on. On hand-back: validate the current
+URL against the allowlist (distinct human-attributed outcome if off-list);
+check the capability checkpoint first — if it holds, skip to output extraction;
+otherwise scan forward from the current step for the furthest consistent
+pre/postcondition frontier and resume there; if no unique resume point exists,
+re-escalate with an operator affordance ("I completed it" / "retry from here").
+Never guess — the same rule the ladder enforces.
 
 ## Safety
 
-- Allowlist enforced at the Surface for every navigation and action — not just
-  requested of the model in a prompt.
-- Risk classes on steps: `safe` vs `irreversible`. Irreversible ⇒ blocked in
-  unattended replay unless explicitly approved (`--approve-irreversible`),
-  escalated in attended mode; same gate during discovery.
-- Redaction: parameters marked `sensitive` never appear in artifacts, traces,
-  prompts (masked in observation serialization), or screenshots (suppressed on
-  sensitive steps). Credentials only via environment. All fixture data is fake.
+- **Allowlist enforced at the network layer**, not in prompts: `context.route`
+  aborts off-allowlist requests (covers redirects, popups, and iframes,
+  context-wide); a navigation listener converts off-list top-level navigation
+  into `POLICY_VIOLATION`; unexpected popups are closed or escalated; frames
+  with off-allowlist origins are excluded from observations so foreign content
+  never reaches a prompt or trace. The allowlist lives in policy config owned
+  by the Policy component — never in the tenant overlay (a tenancy mechanism
+  must not be able to widen a safety boundary).
+- **Risk posture is inverted: mutating-by-default.** Any action observed to
+  provoke a non-GET request during discovery defaults to `risky`; planner
+  classification and keyword rules can only *raise* risk, never lower it. A
+  capability is ineligible for unattended replay until a human has reviewed the
+  diffable step list and signed the risk labels (`risk_review` binds to the
+  artifact hash — re-recording invalidates approval). Approval at invocation is
+  per step (`approve: ["s7"]`), not a blanket flag that switches the safety
+  system off. Recovery steps pass the same gates.
+- **Secrets are symbolic end-to-end.** Type-actions carry `{param:name}` or
+  `{secret:ENV_VAR}`; the Surface resolves them at act time from an in-process
+  store; the planner receives parameter *names* (with sensitivity flags and
+  non-sensitive examples), never sensitive values, so a secret cannot transit a
+  prompt. A sensitive parameter forbids `example`; sensitive postconditions are
+  evaluated inside the Surface and recorded boolean-only.
+- **Taint-based masking, by element identity, not string match.** Any element a
+  sensitive step acted on (and its frame, until navigation) is tainted; every
+  subsequent observation masks its value before serialization to prompt or
+  trace — echo-through-the-a11y-tree is the leak string matching misses, and
+  masking by identity avoids corrupting a "$12,345.00" that happens to contain
+  a member ID. Failure/escalation evidence captured under taint gets tainted
+  regions masked in the screenshot (Playwright `mask`) and scrubbed from the
+  snapshot — masked, not suppressed, so debuggability survives.
+- Outputs can be `sensitive` (masked in traces, returned only in the result
+  object). Trace entries default to observation digests, with full snapshots
+  only on FAILURE evidence, scrubbed. URLs in traces pass a query-value
+  scrubber (declared params + configurable key patterns: ssn, member, acct).
+  `runs/` is operational data with a stated retention position, not an archive.
+- **Canary test:** a scripted "human" types a sentinel string during handoff;
+  the suite asserts the sentinel appears nowhere under `runs/`.
 
 ## Heterogeneity & tenancy (design-only, per the brief)
 
-- **Surface seam:** desktop = same `observe/act` protocol over UIA/AX; the
-  artifact's semantic targets (role + name) are exactly what those APIs expose.
-- **Tenant reuse:** capabilities reference a logical app + semantic targets; a
-  per-tenant overlay file (entry URL, label synonyms per rung, extra known
-  conditions) merges at load time — record once, override narrowly.
-- **Drift detection:** replay telemetry records which ladder rung matched and
-  which conditions fired; when lower rungs start carrying the load for a tenant,
-  that capability is flagged for re-discovery *before* it breaks.
+**What transfers to desktop (UIA/AX) cleanly:** semantic role+name targets, the
+ladder discipline, condition polling, checkpoints, typed I/O, the control-token
+escalation model. **What needs per-surface work:** a role/rung mapping layer
+(ARIA `textbox` ↔ UIA `Edit`; context path = frame chain on web, window/pane
+chain on desktop; CSS rung is declared web-only and skipped elsewhere), input
+synthesis, dialog scoping as context roots, and — honestly — name computation:
+the browser *computes* accessible names from labels and adjacent text; a
+custom-drawn Win32 teller app exposes an empty UIA tree, and the realistic
+fallback there is an OCR/vision rung, rejected as a *primary* mechanism for the
+web path but acceptable as a flagged last rung on desktop. The schema is
+surface-neutral now (`context` paths, surface-typed `entry`, geometric
+`relative`) precisely so this stays a mapping problem, not a rewrite.
+
+**Tenant reuse.** The overlay is a **typed patch document**, not "synonyms":
+keyed by artifact addresses (step id + rung, condition id, checkpoint, output
+id), with explicit merge semantics (override / append / disable) — a renamed
+label breaks checkpoints and output anchors too, and the overlay must reach
+them. An overlay pins its base `{capability, version}`; the loader hard-fails
+on mismatch (silent best-effort merging across a rev is how you break three
+hundred tenants at once with no signal). Overlays may only map recognizers to
+already-declared outcome codes — a genuinely new business outcome is a contract
+change and bumps the base version for every caller. Structural variance (an
+extra verification step, different page order) is not an overlay's job: that's
+a capability **variant** sharing the same parameter/output contract, selected
+by a tenant → (capability, version/variant) resolution table — callers see one
+stable tool. Overlay entries are born from the escalation loop (a human
+resolves an unknown state once; the resolution is captured as a proposed
+entry) and reviewed like artifacts, because overlays alter behavior.
+
+**Drift detection, concretely:** every replay appends `{capability, version,
+tenant, per-step rung index, name source: base|overlay, conditions fired}` to a
+per-capability health file; a threshold rule (rung > 1 carrying > 20% of the
+last N runs for a tenant) flips a `needs_rediscovery` status that future
+replays surface and promotion gates read. Re-discovery re-runs the stored goal
+template and diffs the parameter/output contract to confirm callers are
+unaffected.
 
 ## Eval plan
 
-Pytest scenario suite against the local fixture app (offline, CI-able):
+Pytest scenario suite against the local fixture (offline, CI-able):
 
 - happy-path replay with fresh params;
 - six injected runtime states — not-found, permission-denied, validation error,
-  session expiry, surprise interstitial, slow load — each asserting the *correct
-  classification*, not just non-crash;
-- element-removed (quality of the hard-failure report);
-- one drift case (renamed label; ladder rung 2 catches it) — the brief asks
-  about drift only secondarily;
+  session expiry, surprise interstitial, slow load — each asserting the
+  *correct classification*, with recognizer verified/unverified counts reported;
+- interstitial appearing **between** steps (the act-phase recognition path);
+- element-removed (quality of the FAILURE report);
+- double-submit probe: slow confirmation page on an irreversible step — assert
+  escalation, not re-click;
+- one drift case (renamed label; rung 2 catches it) — drift is secondary here;
 - N=10 replay stability;
-- negative policy tests: a fake planner proposes a disallowed / off-allowlist
-  action and is blocked;
-- the zero-LLM replay proof.
+- negative policy tests: off-allowlist action blocked; unapproved irreversible
+  step blocked; recovery step marked irreversible blocked unattended;
+- redaction canary (sentinel never persists) and the hermetic zero-LLM proof;
+- escalation TTL expiry path.
 
 Reported as a table: scenario × expected vs actual classification; discovery vs
-replay latency; tokens + cost (replay = 0); stability. Evidence from the real
-LLM discovery run committed under `/evidence/`.
+replay latency; tokens + cost (replay = 0); stability; per-step rung-hit
+distribution (CSS rung expected at zero). Evidence from the real LLM discovery
+run committed under `/evidence/`.
 
-## Targets
+## Targets & scope honesty
 
 - **Fixture:** "Fairview Teller" — small Flask app, deliberately legacy: table
   layout, no test IDs, nav iframe, server-rendered, terse non-semantic markup;
-  fault-injection endpoint; fake seeded data. A second skin ("Lakeside") with
-  renamed labels and an extra interstitial is the two-tenants demo.
-- **Portability leg:** replay a second, simple capability against
-  saucedemo.com (built for automation practice) to show nothing is welded to
-  the fixture's markup. First thing cut if time runs short.
+  fault-injection endpoint; fake seeded data.
+- **Second tenant:** "Lakeside" — structurally divergent templates (different
+  frame layout, renamed labels, extra interstitial, reordered columns), not a
+  string-swap skin, so the two-tenant demo exercises rungs 2–4 and the overlay,
+  not a synonym map.
+- **Portability leg:** one simple capability against saucedemo.com (built for
+  automation practice) — proves nothing is welded to self-authored markup.
+
+**Cut order if time runs short** (never both #1 and #2 — that would leave zero
+generalization evidence): 1) saucedemo leg; 2) Lakeside skin (tenancy falls
+back to overlay-merge unit tests + this design); 3) operator console degrades
+from web page to CLI on the same state machine; 4) the drift eval case.
+**Never cut:** slices 1–3, the escalation state machine, the zero-LLM proof.
 
 ## Slices (each ends runnable + tested)
 
@@ -209,23 +451,22 @@ LLM discovery run committed under `/evidence/`.
 2. Planner + recorder: discovery produces an artifact that slice 1 replays.
    The real evidence run happens here.
 3. Full failure taxonomy: fault injection, recognizers, three-way contract.
-4. Escalation & handoff: control token, operator console, human-action capture,
-   resume verification.
-5. Policy hardening: allowlist, risk gates, redaction, negative tests.
+4. Escalation & handoff: token protocol, operator console, human-action
+   capture, resume scan.
+5. Policy hardening: network-layer allowlist, risk gates, taint redaction.
 6. Evals + evidence + README/REPORT + tenant-variant and portability demos.
 
 ## Considered and rejected
 
-- **Screenshot + coordinate replay** — the most literal "computer use", but
-  coordinates are exactly the brittleness the brief warns about, and re-finding
-  targets each run puts a model back into the supposedly model-free path.
-  Screenshots kept for evidence and escalation context only.
-- **CSS/XPath as primary locators** — assumes the clean DOM the brief spends a
-  page saying doesn't exist. Kept only as the flagged last-resort rung.
+- **Screenshot + coordinate replay** — coordinates are the brittleness the
+  brief warns about, and re-finding targets each run puts a model back into the
+  model-free path. Kept for evidence/escalation context on web; explicitly
+  *not* foreclosed as a last-rung fallback for custom-drawn desktop controls.
+- **CSS/XPath as primary locators** — assumes a clean DOM the brief says
+  doesn't exist. Kept as the flagged, same-tenant-only last rung.
 - **Transcript-as-artifact** — not typed, not reviewable, not parameterizable.
-  The transcript is evidence; the artifact is a contract.
-- **Agent frameworks** (LangChain etc.) — the loop is a couple hundred lines;
-  a framework adds a dependency to defend without adding capability.
+- **Agent frameworks** — the loop is a couple hundred lines; a framework adds
+  a dependency to defend without adding capability.
 - **A database** — JSON files are diffable and reviewable, which is the point.
 - **Services/queues** — single process; the brief explicitly does not reward
   scaling infrastructure.

@@ -247,3 +247,22 @@ every trace, and a schema with no web-specific field outside one flagged rung.
 If the interview wants it demonstrated, the overlay loader plus a divergent
 skin is the first item on the next-steps list, and the schema was shaped so
 that work is additive.
+
+## Production storage
+
+**Q: Where do these JSON artifacts live in production?**
+
+In git — deliberately, because an artifact has source code's lifecycle, not a
+database row's: it's reviewed (the risk sign-off becomes a pull request),
+versioned (callers pin name@version), diffable, and promoted. CI runs the
+schema's load-time validators on merge. In front of that, a thin registry:
+(name, version, tenant) resolving to a content hash, blobs in object storage
+keyed by sha256 so nothing changes under a caller silently — every trace
+already logs that hash, so an auditor can go from any run to the exact bytes
+of the contract that executed. What does NOT go in git: per-run traces
+(object storage with retention), drift/health telemetry, and promotion state
+(database, keyed by artifact hash). The rule: immutable-and-reviewed lives in
+git and content-addressed blobs; mutable-and-per-run lives in a database.
+Putting everything in Postgres works mechanically but you'd rebuild what git
+gives free — diff review, immutable history, rollback, blame. The repo's
+files-in-git layout isn't a shortcut; it's this design scaled down.

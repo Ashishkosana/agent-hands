@@ -261,6 +261,10 @@
       },
       "classify": "business_outcome",
       "outcome_code": "MEMBER_NOT_FOUND",
+      "recovery": [],
+      "resume": null,
+      "restart_from": null,
+      "max_fires_per_run": 2,
       "provenance": "discovered",
       "verified_by_eval": false
     }
@@ -288,7 +292,7 @@
   },
   "allow_unbound_checkpoint": false,
   "risk_review": {
-    "reviewed_by": null,
-    "artifact_hash": null
+    "reviewed_by": "ashishk",
+    "artifact_hash": "e5e390da17f4624b1c4dfb13dac843d340eee2c085c9efabe661239933434d50"
   }
 }

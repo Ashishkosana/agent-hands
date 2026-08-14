@@ -1,0 +1,19 @@
+{"ts": "2026-08-14T18:24:56.235+00:00", "event": "run_started", "capability": "lookup_member_balance", "version": 1, "artifact_sha256": "fe1a1b90f40907e121e773c6facabedaf19e5c0b69031de4bed1a08d3aab4004", "params": {"member_id": "12345"}}
+{"ts": "2026-08-14T18:24:56.239+00:00", "event": "operator_console_started", "url": "http://127.0.0.1:8321/"}
+{"ts": "2026-08-14T18:24:57.141+00:00", "event": "requires_met"}
+{"ts": "2026-08-14T18:24:57.142+00:00", "event": "step_started", "step": "s1", "intent": "Enter the member ID in the search field", "risk": "safe"}
+{"ts": "2026-08-14T18:24:57.146+00:00", "event": "act_attempt_failed", "step": "s1", "attempt": 1, "error": "no rung matched; tried: label='Member ID' (0 matches); relative:nearest_input_right of (text='Member ID') (0 matches)", "will_retry": false}
+{"ts": "2026-08-14T18:24:57.205+00:00", "event": "escalation_raised", "step": "s1", "reason": "expected a unique visible target via ladder [label='Member ID' -> relative:nearest_input_right of (text='Member ID')]; observed no rung matched; tried: label='Member ID' (0 matches); relative:nearest_input_right of (text='Member ID') (0 matches)", "escalation": 1}
+{"ts": "2026-08-14T18:24:57.310+00:00", "event": "control_granted", "operator": "ashishk"}
+{"ts": "2026-08-14T18:24:57.715+00:00", "event": "human_action", "kind": "click", "tag": "input", "text": ""}
+{"ts": "2026-08-14T18:24:57.719+00:00", "event": "human_command_executed", "kind": "click", "role": "button", "name": "Dismiss", "text_masked_length": null, "operator": "ashishk"}
+{"ts": "2026-08-14T18:24:58.511+00:00", "event": "resume_decision", "operator": "ashishk", "decision": "handback", "resume_index": 0, "of_total": 2}
+{"ts": "2026-08-14T18:24:58.511+00:00", "event": "step_started", "step": "s1", "intent": "Enter the member ID in the search field", "risk": "safe"}
+{"ts": "2026-08-14T18:24:58.538+00:00", "event": "acted", "step": "s1", "action": "type", "rung": "relative:nearest_input_right of (text='Member ID')", "rung_index": 1, "text": "12345"}
+{"ts": "2026-08-14T18:24:58.539+00:00", "event": "postconditions_met", "step": "s1"}
+{"ts": "2026-08-14T18:24:58.539+00:00", "event": "step_started", "step": "s2", "intent": "Submit the member search", "risk": "safe"}
+{"ts": "2026-08-14T18:24:58.583+00:00", "event": "acted", "step": "s2", "action": "click", "rung": "role=button name='Search'", "rung_index": 0, "text": null}
+{"ts": "2026-08-14T18:24:59.133+00:00", "event": "postconditions_met", "step": "s2"}
+{"ts": "2026-08-14T18:24:59.149+00:00", "event": "checkpoint_verified"}
+{"ts": "2026-08-14T18:24:59.202+00:00", "event": "output_extracted", "name": "savings_balance", "value": "\u00abmasked\u00bb"}
+{"ts": "2026-08-14T18:24:59.368+00:00", "event": "run_finished", "result": {"result": "success", "outputs": {"savings_balance": "\u00abmasked\u00bb"}}}

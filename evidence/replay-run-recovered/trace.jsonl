@@ -1,15 +1,15 @@
-{"ts": "2026-08-14T17:42:39.261+00:00", "event": "run_started", "capability": "lookup_member_balance", "version": 1, "artifact_sha256": "1984dbffeba0a1d34f4d105066eb5c8eb51f7056feff9645152f3bd71200486f", "params": {"member_id": "12345"}}
-{"ts": "2026-08-14T17:42:39.669+00:00", "event": "requires_met"}
-{"ts": "2026-08-14T17:42:39.670+00:00", "event": "step_started", "step": "s1", "intent": "Enter the member ID in the search field", "risk": "safe"}
-{"ts": "2026-08-14T17:42:39.671+00:00", "event": "recognizer_fired", "condition": "session_expired", "classify": "recoverable", "matched": "Session Expired", "fire": 1}
-{"ts": "2026-08-14T17:42:39.671+00:00", "event": "recovery_step_started", "condition": "session_expired", "step": "rs1", "intent": "Continue the expired session"}
-{"ts": "2026-08-14T17:42:39.985+00:00", "event": "recovery_step_done", "condition": "session_expired", "step": "rs1"}
-{"ts": "2026-08-14T17:42:39.985+00:00", "event": "step_started", "step": "s1", "intent": "Enter the member ID in the search field", "risk": "safe"}
-{"ts": "2026-08-14T17:42:40.052+00:00", "event": "acted", "step": "s1", "action": "type", "rung": "relative:nearest_input_right of (text='Member ID')", "rung_index": 1, "text": "12345"}
-{"ts": "2026-08-14T17:42:40.054+00:00", "event": "postconditions_met", "step": "s1"}
-{"ts": "2026-08-14T17:42:40.054+00:00", "event": "step_started", "step": "s2", "intent": "Submit the member search", "risk": "safe"}
-{"ts": "2026-08-14T17:42:40.099+00:00", "event": "acted", "step": "s2", "action": "click", "rung": "role=button name='Search'", "rung_index": 0, "text": null}
-{"ts": "2026-08-14T17:42:40.379+00:00", "event": "postconditions_met", "step": "s2"}
-{"ts": "2026-08-14T17:42:40.392+00:00", "event": "checkpoint_verified"}
-{"ts": "2026-08-14T17:42:40.438+00:00", "event": "output_extracted", "name": "savings_balance", "value": "\u00abmasked\u00bb"}
-{"ts": "2026-08-14T17:42:40.457+00:00", "event": "run_finished", "result": {"result": "success", "outputs": {"savings_balance": "\u00abmasked\u00bb"}}}
+{"ts": "2026-08-14T18:25:19.601+00:00", "event": "run_started", "capability": "lookup_member_balance", "version": 1, "artifact_sha256": "1984dbffeba0a1d34f4d105066eb5c8eb51f7056feff9645152f3bd71200486f", "params": {"member_id": "12345"}}
+{"ts": "2026-08-14T18:25:19.990+00:00", "event": "requires_met"}
+{"ts": "2026-08-14T18:25:19.990+00:00", "event": "step_started", "step": "s1", "intent": "Enter the member ID in the search field", "risk": "safe"}
+{"ts": "2026-08-14T18:25:19.992+00:00", "event": "recognizer_fired", "condition": "session_expired", "classify": "recoverable", "matched": "Session Expired", "fire": 1}
+{"ts": "2026-08-14T18:25:19.992+00:00", "event": "recovery_step_started", "condition": "session_expired", "step": "rs1", "intent": "Continue the expired session"}
+{"ts": "2026-08-14T18:25:20.312+00:00", "event": "recovery_step_done", "condition": "session_expired", "step": "rs1"}
+{"ts": "2026-08-14T18:25:20.312+00:00", "event": "step_started", "step": "s1", "intent": "Enter the member ID in the search field", "risk": "safe"}
+{"ts": "2026-08-14T18:25:20.372+00:00", "event": "acted", "step": "s1", "action": "type", "rung": "relative:nearest_input_right of (text='Member ID')", "rung_index": 1, "text": "12345"}
+{"ts": "2026-08-14T18:25:20.373+00:00", "event": "postconditions_met", "step": "s1"}
+{"ts": "2026-08-14T18:25:20.373+00:00", "event": "step_started", "step": "s2", "intent": "Submit the member search", "risk": "safe"}
+{"ts": "2026-08-14T18:25:20.417+00:00", "event": "acted", "step": "s2", "action": "click", "rung": "role=button name='Search'", "rung_index": 0, "text": null}
+{"ts": "2026-08-14T18:25:20.968+00:00", "event": "postconditions_met", "step": "s2"}
+{"ts": "2026-08-14T18:25:20.981+00:00", "event": "checkpoint_verified"}
+{"ts": "2026-08-14T18:25:21.032+00:00", "event": "output_extracted", "name": "savings_balance", "value": "\u00abmasked\u00bb"}
+{"ts": "2026-08-14T18:25:21.059+00:00", "event": "run_finished", "result": {"result": "success", "outputs": {"savings_balance": "\u00abmasked\u00bb"}}}

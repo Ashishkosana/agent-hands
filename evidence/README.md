@@ -5,13 +5,14 @@ Fairview Teller fixture app. All data is fake seed data.
 
 | file | what it shows |
 |---|---|
-| `artifact.json` | the capability the LLM-driven discovery produced — this exact file is what the replay runs below executed |
+| `artifact.json` | the capability the LLM-driven discovery produced (risk-review signed) — this exact file is what the replay runs below executed |
 | `discovery-run/` | the genuine LLM-driven happy run (goal → observe/decide/act → done). `transcript.json` is the full model conversation; `trace.jsonl` includes per-call token usage |
 | `discovery-run-outcome/` | the second discovery leg, run with a member ID known not to exist, ending in `report_outcome(MEMBER_NOT_FOUND)` — this is where the artifact's not-found recognizer comes from |
 | `replay-run/` | deterministic replay of `artifact.json` with a **fresh** parameter (member 67890, which no discovery run ever saw) → `SUCCESS` with the typed balance |
 | `replay-run-not-found/` | replay with a missing member → `BUSINESS_OUTCOME MEMBER_NOT_FOUND`, an answer, not a crash — with the matched region text as auditable evidence |
 | `replay-run-recovered/` | replay with an injected session expiry: the recognizer fires, the engine clicks Continue Session, verifies the state is gone, retries the step, and the run **succeeds** — recovered and logged, never surfaced as failure |
 | `replay-run-validation/` | replay with input the server rejects → `BUSINESS_OUTCOME VALIDATION_REJECTED` |
+| `escalation-run/` | a live human handoff: an unrecognized blocking state raised an intervention (`intervention-1.json` + screenshot); the operator took the SAME session, dismissed the notice through the console, handed back; the engine resume-scanned and the run **succeeded** |
 | `discovery-report.json` | run metrics: endings, step counts, LLM calls, token usage, wall-clock |
 
 Replay involves no model: no `llm_call` events appear in either replay trace,

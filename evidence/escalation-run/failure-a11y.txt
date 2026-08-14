@@ -1,0 +1,47 @@
+# frame: http://127.0.0.1:8000/
+- table:
+  - rowgroup:
+    - row:
+      - cell:
+        - iframe
+      - cell:
+        - iframe
+
+# frame: nav
+- table:
+  - rowgroup:
+    - row "MENU":
+      - cell "MENU"
+    - row "Member Search":
+      - cell "Member Search":
+        - link "Member Search":
+          - /url: /search
+    - row "Reports":
+      - cell "Reports":
+        - link "Reports":
+          - /url: /reports
+    - row "Admin":
+      - cell "Admin":
+        - link "Admin":
+          - /url: /admin
+
+# frame: main
+- table:
+  - rowgroup:
+    - row "Fairview Teller Console":
+      - cell "Fairview Teller Console":
+        - heading "Fairview Teller Console" [level=3]
+    - row "FAIRVIEW FEDERAL CREDIT UNION — INTERNAL USE ONLY — TELLER OPERATIONS":
+      - cell "FAIRVIEW FEDERAL CREDIT UNION — INTERNAL USE ONLY — TELLER OPERATIONS"
+- table:
+  - rowgroup:
+    - row "Notice Scheduled maintenance this weekend. Dismiss":
+      - cell "Notice Scheduled maintenance this weekend. Dismiss":
+        - heading "Notice" [level=3]
+        - table:
+          - rowgroup:
+            - row "Scheduled maintenance this weekend.":
+              - cell "Scheduled maintenance this weekend."
+            - row "Dismiss":
+              - cell "Dismiss":
+                - button "Dismiss"

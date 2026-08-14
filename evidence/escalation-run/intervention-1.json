@@ -1,0 +1,52 @@
+{
+  "capability": "lookup_member_balance",
+  "version": 1,
+  "step_id": "s1",
+  "intent": "Enter the member ID in the search field",
+  "reason": "expected a unique visible target via ladder [label='Member ID' -> relative:nearest_input_right of (text='Member ID')]; observed no rung matched; tried: label='Member ID' (0 matches); relative:nearest_input_right of (text='Member ID') (0 matches)",
+  "params": {
+    "member_id": "12345"
+  },
+  "expected": "a unique visible target via ladder [label='Member ID' -> relative:nearest_input_right of (text='Member ID')]",
+  "remaining_steps": [
+    "Enter the member ID in the search field",
+    "Submit the member search"
+  ],
+  "recent_events": [
+    {
+      "ts": "2026-08-14T18:24:56.235+00:00",
+      "event": "run_started",
+      "capability": "lookup_member_balance",
+      "version": 1,
+      "artifact_sha256": "fe1a1b90f40907e121e773c6facabedaf19e5c0b69031de4bed1a08d3aab4004",
+      "params": {
+        "member_id": "12345"
+      }
+    },
+    {
+      "ts": "2026-08-14T18:24:56.239+00:00",
+      "event": "operator_console_started",
+      "url": "http://127.0.0.1:8321/"
+    },
+    {
+      "ts": "2026-08-14T18:24:57.141+00:00",
+      "event": "requires_met"
+    },
+    {
+      "ts": "2026-08-14T18:24:57.142+00:00",
+      "event": "step_started",
+      "step": "s1",
+      "intent": "Enter the member ID in the search field",
+      "risk": "safe"
+    },
+    {
+      "ts": "2026-08-14T18:24:57.146+00:00",
+      "event": "act_attempt_failed",
+      "step": "s1",
+      "attempt": 1,
+      "error": "no rung matched; tried: label='Member ID' (0 matches); relative:nearest_input_right of (text='Member ID') (0 matches)",
+      "will_retry": false
+    }
+  ],
+  "screenshot_path": "runs/20260814T182456Z-lookup_member_balance-6ed7d1/failure.png"
+}

@@ -51,46 +51,62 @@ agent can invoke it blind; steps are implementation detail below that line.
   "schema_version": 1,
   "name": "lookup_member_balance",
   "version": 1,
-  "description": "Look up a member by ID and read their savings balance.",
-  "target": { "app": "fairview-teller", "entry": { "web": { "url": "http://localhost:8000/" } } },
-  "requires": [ { "kind": "role_name_visible", "role": "heading", "name": "Teller Console" } ],
+  "description": "Look up a member by ID and read their current savings balance.",
+  "target": { "app": "fairview-teller", "entry": { "web": { "url": "http://127.0.0.1:8000/" } } },
+  "requires": [
+    { "kind": "role_name_visible", "role": "heading", "name": "Fairview Teller Console",
+      "context": [ { "name": "main" } ] } ],
   "parameters": { "member_id": {
       "type": "string", "description": "Member number as printed on statements",
-      "sensitive": false, "example": "12345" } },
-  "outcomes": {
-      "MEMBER_NOT_FOUND":  { "description": "No member exists with this ID." },
-      "PERMISSION_DENIED": { "description": "The session's role may not view this member." } },
+      "sensitive": false, "example": "12345", "pattern": "[0-9]{1,10}" } },
+  "outcomes": { "MEMBER_NOT_FOUND": { "description": "No member exists with this ID." } },
   "outputs": { "savings_balance": {
-      "type": "decimal", "sensitive": true,
-      "parse": { "kind": "money", "locale": "en_US" },
-      "from": { "strategy": "relative", "anchor": { "strategy": "text", "text": "Savings" },
-                "relation": "cell_right" } } },
+      "type": "decimal", "sensitive": true, "region": "accounts",
+      "from": { "ladder": [ { "strategy": "relative", "relation": "cell_right",
+                              "anchor": { "strategy": "text", "text": "Savings" } } ],
+                "context": [ { "name": "main" } ] },
+      "parse": { "kind": "money", "locale": "en_US" } } },
+  "regions": {
+    "results": { "ladder": [ { "strategy": "relative", "relation": "container_of",
+        "container": "table", "anchor": { "strategy": "text", "text": "Search Results" } } ],
+      "context": [ { "name": "main" } ] },
+    "member_header": { "ladder": [ { "strategy": "relative", "relation": "container_of",
+        "container": "table", "anchor": { "strategy": "text", "text": "Member #" } } ],
+      "context": [ { "name": "main" } ] },
+    "accounts": { "ladder": [ { "strategy": "relative", "relation": "container_of",
+        "container": "table", "anchor": { "strategy": "text", "text": "Account" } } ],
+      "context": [ { "name": "main" } ] } },
   "steps": [
-    { "id": "s2", "intent": "Enter the member ID in the search field",
+    { "id": "s1", "intent": "Enter the member ID in the search field",
       "action": { "kind": "type", "text": "{param:member_id}" },
-      "target": { "ladder": [
-        { "strategy": "label", "text": "Member ID", "context": ["main"] },
-        { "strategy": "relative", "anchor": { "strategy": "text", "text": "Member ID" },
-          "relation": "nearest_input_right", "context": ["main"] } ],
-        "fingerprint": { "role": "textbox", "editable": true, "region": "search-form" } },
-      "pre":  [ { "kind": "editable" } ],
+      "target": {
+        "ladder": [
+          { "strategy": "label", "text": "Member ID" },
+          { "strategy": "relative", "relation": "nearest_input_right",
+            "anchor": { "strategy": "text", "text": "Member ID" } } ],
+        "context": [ { "name": "main" } ],
+        "fingerprint": { "role": "textbox", "editable": true } },
+      "pre": [ { "kind": "editable" } ],
       "post": [ { "kind": "value_matches_param", "param": "member_id", "normalize": "digits" } ],
-      "risk": "safe" }
-  ],
+      "risk": "safe" },
+    { "id": "s2", "intent": "Submit the member search",
+      "action": { "kind": "click" },
+      "target": { "ladder": [ { "strategy": "role", "role": "button", "name": "Search" } ],
+                  "context": [ { "name": "main" } ], "fingerprint": { "role": "button" } },
+      "pre": [ { "kind": "visible" } ],
+      "post": [ { "kind": "role_name_visible", "role": "heading", "name": "Member Details",
+                  "context": [ { "name": "main" } ] } ],
+      "risk": "safe" } ],
   "conditions": [
-    { "id": "not_found", "armed_after": "s3",
-      "match": { "kind": "region_text", "region": "results", "patterns": ["No member matches"] },
+    { "id": "not_found", "armed_after": "s2",
+      "match": { "kind": "region_text", "region": "results", "patterns": [ "No member matches" ] },
       "classify": "business_outcome", "outcome_code": "MEMBER_NOT_FOUND",
-      "provenance": "discovered", "verified_by_eval": true },
-    { "id": "session_expired", "armed_after": "s1",
-      "match": { "kind": "role_name", "role": "dialog", "name": "Session expired" },
-      "classify": "recoverable", "resume": "retry_current_step",
-      "recovery": [ /* full step schema: ladder targets, risk labels, policy-gated */ ],
-      "max_fires_per_run": 2 }
-  ],
+      "provenance": "authored", "verified_by_eval": false } ],
   "checkpoint": { "all": [
-      { "kind": "role_name_visible", "role": "heading", "name": "Member Details" },
-      { "kind": "region_text_matches_param", "region": "member-header", "param": "member_id" } ] },
+      { "kind": "role_name_visible", "role": "heading", "name": "Member Details",
+        "context": [ { "name": "main" } ] },
+      { "kind": "region_text_matches_param", "region": "member_header", "param": "member_id" } ] },
+  "allow_unbound_checkpoint": false,
   "risk_review": { "reviewed_by": null, "artifact_hash": null }
 }
 ```
@@ -102,8 +118,11 @@ Schema decisions an interviewer will probe, answered:
   reachable). Return envelope: `SUCCESS{outputs} | OUTCOME{code, evidence} |
   FAILURE{report}` — outputs present iff SUCCESS.
 - **The checkpoint must bind identity.** Checkpoint conditions accept `{param}`
-  references; publish-time validation warns loudly if a capability with
-  identifying parameters has a checkpoint that references none of them.
+  references; load-time validation refuses a capability whose checkpoint
+  references no parameter (an explicit waiver field exists for genuinely
+  parameter-free capabilities). Identity matching is boundary-anchored, never
+  bare substring containment — member "123" must not pass against a page
+  showing member "12345".
   "Member Details is visible" proves you reached *a* details page; only
   "member-header matches `{member_id}`" proves it's the right one. Output
   extraction anchors inside the identity-verified region.
@@ -116,7 +135,14 @@ Schema decisions an interviewer will probe, answered:
 - **Typed outputs carry parse specs.** `"decimal"` alone can't turn "$1,234.50"
   (or "(1,234.50)", or a European tenant's "1.234,50") into a number
   deterministically. A named parser + locale does; the tenant overlay can
-  override locale. A parse failure is a FAILURE, never a value.
+  override locale. The parser is strict for its declared locale: a
+  comma-decimal rendering *fails* under en_US rather than silently parsing to
+  a 100×-wrong number, and `NaN`/`Infinity` (which a naive Decimal() accepts)
+  are rejected. A parse failure is a FAILURE, never a value.
+- **Named regions are declared in the artifact.** Recognizers, identity
+  checkpoints, and output extraction all reference regions by name; the
+  `regions` registry maps each name to its own locator ladder, so "structural
+  scoping" is itself reviewable rather than hard-coded.
 - **Version semantics:** a change to parameters, outputs, or outcome codes is a
   contract change and bumps `version` (callers pin `name@version`); step/ladder
   edits are revisions within it. Every trace logs the hash of the effective
@@ -136,22 +162,28 @@ less specific — they are fallbacks, not disambiguators).
    links, and text-bearing cells. *Honest limit:* a bare `<input>` in a table
    cell has an **empty** accessible name; roles are always computed, names are
    not. On legacy form controls the ladder lives on rungs 2–4.
-2. **label** — real label association where it exists, plus a custom proximity
-   resolver (same row / preceding cell / nearest preceding text) computed over
-   the observation tree, since legacy markup rarely has `<label for>`.
-3. exact visible **text** (links/buttons).
+2. **label** — real label association only (`label[for]`, aria-label).
+   Proximity-based labeling is deliberately a *separate* rung (relative, below)
+   so telemetry shows which mechanism actually carried each step on legacy
+   markup, where `<label for>` rarely exists.
+3. exact visible **text** (links/buttons); when exact text nests (`<td><b>`),
+   the innermost match wins — nesting is one rendered string, not ambiguity.
 4. **relative** — geometric relation to an anchor found by 1–3 ("nearest input
    right of 'Member ID'", "cell right of 'Savings'"). Defined geometrically
-   (bounding boxes are in the observation), not by DOM traversal — that is what
-   makes it both table-soup-proof and desktop-portable.
+   (vertical overlap for "same row", not center distance — a header cell one
+   row up must not qualify), not by DOM traversal — that is what makes it both
+   table-soup-proof and desktop-portable. A geometric tie is ambiguity and
+   fails; DOM order never breaks a tie.
 5. recorded **CSS** path, web-only, last resort: use emits a fragility warning
    into drift telemetry, and the rung is **disabled entirely when the replay
    tenant differs from the recording tenant** (a positional path on a different
    DOM resolves *uniquely to the wrong element* — uniqueness is not correctness).
 
-Every target also records a **fingerprint** (expected role, editability, coarse
-region) captured at distillation; the resolved element is verified against it on
-every replay — mismatch is a warning on safe steps, a hard failure on risky ones.
+Every target also records a **fingerprint** (expected role, editability)
+captured at distillation; the resolved element is verified against it on every
+replay — any mismatch fails the resolution outright. (Stricter than an earlier
+draft's warning-on-safe-steps: acting on a wrong element is never acceptable,
+whatever the step's risk class.)
 At distillation, every rung is round-tripped through the same locator engine
 replay uses, against the record-time page; a rung that can't round-trip is a
 distillation error, not a latent replay bug. Observation and resolution share
@@ -216,9 +248,10 @@ verified; then per step:
   act as a bounded retry loop, evaluating armed recognizers *before the first
   attempt and between attempts* — a session-expiry dialog that appears between
   steps is recognized and recovered, not smashed into a 30 s TimeoutError.
-- **Freshness and precedence.** Recognizers are evaluated only against state
-  proven fresh relative to the action (navigation observed, or pre-action state
-  seen gone) — a stale "No member matches" from the previous search cannot fire.
+- **Freshness and precedence.** Recognizers already matching *before* a step's
+  action are suppressed for that step — stale state may not classify a new
+  action — and the suppression lifts the moment the stale state is observed
+  gone, so a genuine new match of the same recognizer still counts.
   If a postcondition and a recognizer are simultaneously true, the postcondition
   wins. Every OUTCOME carries the matched node's role/region context as
   auditable evidence.

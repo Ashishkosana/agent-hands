@@ -14,6 +14,7 @@ Ladder semantics (pinned, part of the schema contract):
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -136,10 +137,50 @@ class WebSurface:
 
     # ------------------------------------------------------------- lifecycle
 
-    def start(self, entry_url: str) -> None:
+    # Injected once at context creation (listeners injected at takeover time
+    # would die on the first navigation). Reports ONLY semantic descriptors —
+    # never field values: on legacy surfaces SSNs live in plain text inputs
+    # and no heuristic can find them all, so values are categorically
+    # excluded and only a masked length is reported for typing.
+    _CAPTURE_JS = """
+    (() => {
+      const describe = (el) => ({
+        tag: el.tagName ? el.tagName.toLowerCase() : '',
+        text: ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)
+          ? '' : (el.innerText || el.value || '').trim().slice(0, 80),
+      });
+      document.addEventListener('click', (e) => {
+        if (window.__handsHumanEvent) {
+          window.__handsHumanEvent({ kind: 'click', ...describe(e.target) });
+        }
+      }, true);
+      document.addEventListener('input', (e) => {
+        if (window.__handsHumanEvent) {
+          const value = e.target && e.target.value ? e.target.value : '';
+          window.__handsHumanEvent({
+            kind: 'input',
+            tag: e.target.tagName ? e.target.tagName.toLowerCase() : '',
+            masked_length: value.length,
+          });
+        }
+      }, true);
+    })();
+    """
+
+    def start(
+        self,
+        entry_url: str,
+        on_human_event: Callable[[dict[str, object]], None] | None = None,
+    ) -> None:
         self._playwright = sync_playwright().start()
         self._browser = self._playwright.chromium.launch(headless=not self._headed)
         self._page = self._browser.new_page()
+        if on_human_event is not None:
+            self._page.expose_binding(
+                "__handsHumanEvent",
+                lambda _source, event: on_human_event(dict(event)),
+            )
+            self._page.add_init_script(self._CAPTURE_JS)
         self._page.goto(entry_url)
 
     def stop(self) -> None:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import secrets
+from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
@@ -21,9 +22,10 @@ def new_run_dir(base: Path, capability_name: str) -> Path:
 
 
 class Trace:
-    def __init__(self, run_dir: Path) -> None:
+    def __init__(self, run_dir: Path, tail_size: int = 20) -> None:
         self.run_dir = run_dir
         self._file = (run_dir / "trace.jsonl").open("a", encoding="utf-8")
+        self._tail: deque[dict[str, object]] = deque(maxlen=tail_size)
 
     def emit(self, event: str, **fields: object) -> None:
         record: dict[str, object] = {
@@ -33,6 +35,12 @@ class Trace:
         }
         self._file.write(json.dumps(record, default=str) + "\n")
         self._file.flush()
+        self._tail.append(record)
+
+    def tail(self) -> list[dict[str, object]]:
+        """Recent events — carried in intervention requests so an operator
+        sees what the automation just did before it stopped."""
+        return list(self._tail)
 
     def close(self) -> None:
         self._file.close()

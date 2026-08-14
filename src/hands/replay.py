@@ -20,6 +20,7 @@ action is the one failure this engine must make structurally impossible.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import time
 from dataclasses import dataclass
@@ -42,10 +43,19 @@ from hands.conditions import (
     post_holds,
     state_holds,
 )
+from hands.escalation import (
+    ConsoleServer,
+    ControlState,
+    Decision,
+    EscalationHub,
+    HumanCommand,
+    Intervention,
+)
 from hands.results import (
     BusinessOutcome,
     Failure,
     FailureReport,
+    MatchEvidence,
     OutputValue,
     PreconditionFailed,
     ReplayResult,
@@ -63,6 +73,16 @@ from hands.values import ValueError_, parse_money, resolve_text
 
 
 @dataclass
+class EscalationSettings:
+    """Attended mode: failures pause the run and raise an intervention for a
+    human instead of returning FAILURE immediately."""
+
+    ttl_s: float = 300.0  # unanswered interventions fail; the session is closed
+    console_port: int = 0  # 0 = ephemeral
+    max_escalations: int = 3  # per run; beyond this, fail rather than ping-pong
+
+
+@dataclass
 class EngineConfig:
     headed: bool = False
     runs_dir: Path = Path("runs")
@@ -70,6 +90,7 @@ class EngineConfig:
     requires_budget_s: float = 3.0
     poll_interval_s: float = 0.25
     attempt_timeout_ms: int = 2000
+    escalation: EscalationSettings | None = None
 
 
 class _Recognized(Exception):
@@ -82,6 +103,10 @@ class _Recognized(Exception):
 class _StepFailed(Exception):
     def __init__(self, report: FailureReport) -> None:
         self.report = report
+
+
+class _PauseRequested(Exception):
+    """Internal control flow: the operator asked for control mid-run."""
 
 
 class _Recover(Exception):
@@ -97,6 +122,7 @@ class _Recover(Exception):
 class ReplayEngine:
     def __init__(self, config: EngineConfig | None = None) -> None:
         self.config = config or EngineConfig()
+        self._hub: EscalationHub | None = None
 
     def run(self, capability: Capability, params: dict[str, str]) -> ReplayResult:
         self._validate_params(capability, params)
@@ -104,6 +130,8 @@ class ReplayEngine:
         surface = WebSurface(
             headed=self.config.headed, attempt_timeout_ms=self.config.attempt_timeout_ms
         )
+        hub: EscalationHub | None = None
+        console: ConsoleServer | None = None
         with Trace(run_dir) as trace:
             trace.emit(
                 "run_started",
@@ -116,18 +144,42 @@ class ReplayEngine:
                 ).hexdigest(),
                 params=_masked_params(capability, params),
             )
+            on_human_event = None
+            if self.config.escalation is not None:
+                hub = EscalationHub()
+                console = ConsoleServer(hub, port=self.config.escalation.console_port)
+                console.start()
+                trace.emit("operator_console_started", url=f"http://127.0.0.1:{console.port}/")
+
+                def on_human_event(event: dict[str, object], _hub: EscalationHub = hub) -> None:
+                    if _hub.record_human_action(event):
+                        trace.emit("human_action", **event)
+
+            self._hub = hub
             try:
-                surface.start(capability.target.entry.web.url)
+                surface.start(capability.target.entry.web.url, on_human_event=on_human_event)
                 result = self._execute(capability, params, surface, trace, run_dir)
             except _Recognized as hit:
                 result = hit.outcome
             except _StepFailed as failed:
-                shot, snap = surface.capture_evidence(run_dir)
-                failed.report.screenshot_path = shot
-                failed.report.snapshot_path = snap
+                # Page-content evidence is suppressed once a human has driven
+                # the session: what they entered may still sit in page state,
+                # and a screenshot/snapshot would persist it. (Element-level
+                # taint masking would refine suppression to masking.)
+                if hub is not None and (
+                    hub.state is ControlState.HUMAN or hub.human_actions
+                ):
+                    trace.emit("evidence_suppressed_human_window")
+                else:
+                    shot, snap = surface.capture_evidence(run_dir)
+                    failed.report.screenshot_path = shot
+                    failed.report.snapshot_path = snap
                 result = Failure(report=failed.report)
             finally:
                 surface.stop()
+                if console is not None:
+                    console.stop()
+                self._hub = None
             trace.emit("run_finished", result=_masked_result(capability, result))
         return result
 
@@ -148,36 +200,51 @@ class ReplayEngine:
         step_order = {step.id: i for i, step in enumerate(capability.steps)}
         fires: dict[str, int] = {}
         suppressed: set[str] = set()
+        escalations = 0
         total = len(capability.steps)
         index = 0
-        # The index loop exists for recovery resume semantics: a recoverable
-        # condition may retry the current step or restart from an earlier one,
-        # bounded by per-condition fire caps. index == total is the checkpoint
-        # phase (a pseudo-step recovery may also resume into).
+        # The index loop exists for resume semantics: a recoverable condition
+        # (or a human handback) may retry the current step or resume anywhere,
+        # bounded by fire caps and the escalation budget. index == total is
+        # the checkpoint phase (a pseudo-step recovery may also resume into).
         while index <= total:
-            if index == total:
-                try:
+            step = capability.steps[index] if index < total else None
+            try:
+                if step is None:
                     self._verify_checkpoint(capability, params, surface, trace, suppressed)
-                except _Recover as rec:
+                    break
+                armed = [
+                    c for c in capability.conditions if step_order[c.armed_after] <= index
+                ]
+                suppressed = self._run_step(capability, params, surface, trace, step, armed)
+                index += 1
+            except _Recover as rec:
+                try:
                     index = self._recover(
                         capability, params, surface, trace, rec, fires, step_order,
-                        current=index, step=None,
+                        current=index, step=step,
                     )
-                    continue
-                break
-            step = capability.steps[index]
-            armed = [
-                c for c in capability.conditions if step_order[c.armed_after] <= index
-            ]
-            try:
-                suppressed = self._run_step(capability, params, surface, trace, step, armed)
-            except _Recover as rec:
-                index = self._recover(
-                    capability, params, surface, trace, rec, fires, step_order,
-                    current=index, step=step,
+                except _StepFailed as failed:
+                    index, escalations = self._maybe_escalate(
+                        capability, params, surface, trace, run_dir,
+                        failed.report, index, escalations,
+                    )
+            except _StepFailed as failed:
+                index, escalations = self._maybe_escalate(
+                    capability, params, surface, trace, run_dir,
+                    failed.report, index, escalations,
                 )
-                continue
-            index += 1
+            except _PauseRequested:
+                index, escalations = self._maybe_escalate(
+                    capability, params, surface, trace, run_dir,
+                    FailureReport(
+                        step_id=step.id if step else None,
+                        intent=step.intent if step else "verify checkpoint",
+                        expected="operator requested control",
+                        observed="run paused at the operator's request",
+                    ),
+                    index, escalations,
+                )
 
         outputs = self._extract_outputs(capability, surface, trace)
         return Success(outputs=outputs)
@@ -373,6 +440,12 @@ class ReplayEngine:
         suppressed: set[str],
         acted: bool,
     ) -> None:
+        if (
+            self._hub is not None
+            and self._hub.pause_requested
+            and self._hub.state is ControlState.AUTOMATION
+        ):
+            raise _PauseRequested
         hit = check_recognizers(surface, capability, armed, suppressed)
         if hit is None:
             return
@@ -531,6 +604,223 @@ class ReplayEngine:
             # attempt may not have produced; don't guess.
             return False
         return all(post_holds(surface, c, capability, params, None) for c in step.post)
+
+    def _maybe_escalate(
+        self,
+        capability: Capability,
+        params: dict[str, str],
+        surface: WebSurface,
+        trace: Trace,
+        run_dir: Path,
+        report: FailureReport,
+        index: int,
+        escalations: int,
+    ) -> tuple[int, int]:
+        """Attended mode turns a would-be FAILURE into an intervention.
+        Returns (resume index, escalation count); raises the terminal result
+        when the operator aborts/resolves, the TTL expires, unattended mode
+        has no human to ask, or the escalation budget is spent."""
+        hub = self._hub
+        settings = self.config.escalation
+        if hub is None or settings is None:
+            raise _StepFailed(report)
+        escalations += 1
+        if escalations > settings.max_escalations:
+            report.observed += " (escalation budget exhausted)"
+            raise _StepFailed(report)
+
+        shot, _snap = surface.capture_evidence(run_dir)
+        step = capability.steps[index] if index < len(capability.steps) else None
+        intervention = Intervention(
+            capability=capability.name,
+            version=capability.version,
+            step_id=report.step_id,
+            intent=report.intent,
+            reason=f"expected {report.expected}; observed {report.observed}",
+            params=_masked_params(capability, params),
+            expected=report.expected,
+            remaining_steps=[s.intent for s in capability.steps[index:]],
+            recent_events=trace.tail(),
+            screenshot_path=shot,
+        )
+        (run_dir / f"intervention-{escalations}.json").write_text(
+            json.dumps(intervention.__dict__, indent=2, default=str)
+        )
+        hub.park(intervention)
+        trace.emit(
+            "escalation_raised",
+            step=report.step_id,
+            reason=intervention.reason,
+            escalation=escalations,
+        )
+        decision, note, code, operator = self._park_and_wait(
+            capability, params, surface, trace, hub, settings
+        )
+        if decision is Decision.ABORT:
+            trace.emit("escalation_aborted", operator=operator, reason=note)
+            raise _StepFailed(
+                FailureReport(
+                    step_id=report.step_id,
+                    intent=report.intent,
+                    expected=report.expected,
+                    observed=f"aborted by operator {operator!r}: {note}",
+                )
+            )
+        if decision is Decision.RESOLVE:
+            trace.emit("escalation_resolved", operator=operator, code=code, note=note)
+            raise _Recognized(
+                BusinessOutcome(
+                    code=code,
+                    description=capability.outcomes[code].description,
+                    evidence=MatchEvidence(
+                        condition_id=f"human:{operator}", matched_text=note or code
+                    ),
+                )
+            )
+        # APPROVE or HANDBACK: find where the flow actually is now. A human
+        # commonly finishes the screen they were on — blind current-step
+        # retry would re-execute steps against a moved-on page.
+        hub.resume_automation()
+        resume_at = self._resume_scan(capability, params, surface, index, step)
+        trace.emit(
+            "resume_decision",
+            operator=operator,
+            decision=decision.value,
+            resume_index=resume_at,
+            of_total=len(capability.steps),
+        )
+        return resume_at, escalations
+
+    def _park_and_wait(
+        self,
+        capability: Capability,
+        params: dict[str, str],
+        surface: WebSurface,
+        trace: Trace,
+        hub: EscalationHub,
+        settings: EscalationSettings,
+    ) -> tuple[Decision, str, str, str | None]:
+        """The parked engine loop: the ONLY thread that may touch the browser,
+        so it also executes the console's mock manual-control commands on the
+        operator's behalf. An unanswered intervention expires (no keep-alive
+        games with a banking session)."""
+        deadline = time.monotonic() + settings.ttl_s
+        last_state = hub.state
+        while True:
+            state = hub.state
+            if state is ControlState.HUMAN and last_state is ControlState.PAUSED:
+                trace.emit("control_granted", operator=hub.operator)
+            last_state = state
+            if state is ControlState.HUMAN:
+                command = hub.pop_command()
+                if command is not None:
+                    self._execute_human_command(surface, trace, hub, command)
+                    continue
+            decision, note, code, operator = hub.take_decision()
+            if decision is not Decision.NONE:
+                if decision is Decision.RESOLVE and code not in capability.outcomes:
+                    trace.emit("escalation_invalid_decision", code=code, operator=operator)
+                    continue  # invalid code: stay parked, the console shows declared codes
+                return decision, note, code, operator
+            if time.monotonic() >= deadline:
+                trace.emit("escalation_ttl_expired", ttl_s=settings.ttl_s)
+                raise _StepFailed(
+                    FailureReport(
+                        step_id=None,
+                        intent="await operator",
+                        expected=f"an operator decision within {settings.ttl_s}s",
+                        observed="intervention unanswered; session closed",
+                    )
+                )
+            time.sleep(min(self.config.poll_interval_s, 0.1))
+
+    def _execute_human_command(
+        self,
+        surface: WebSurface,
+        trace: Trace,
+        hub: EscalationHub,
+        command: HumanCommand,
+    ) -> None:
+        """Execute one console command on the live session. Typed values are
+        never recorded — the trace carries a masked length, same as any human
+        keystroke."""
+        try:
+            target = None
+            for frame in surface.page.frames:
+                matches = frame.get_by_role(command.role, name=command.name, exact=True)  # type: ignore[arg-type]
+                visible = [
+                    matches.nth(i) for i in range(matches.count()) if matches.nth(i).is_visible()
+                ]
+                if len(visible) == 1:
+                    target = visible[0]
+                    break
+            if target is None:
+                raise SurfaceError(
+                    f"no unique visible {command.role} named {command.name!r} in any frame"
+                )
+            if command.kind == "type":
+                target.fill(command.text, timeout=3000)
+            else:
+                target.click(timeout=3000)
+            trace.emit(
+                "human_command_executed",
+                kind=command.kind,
+                role=command.role,
+                name=command.name,
+                text_masked_length=len(command.text) if command.kind == "type" else None,
+                operator=hub.operator,
+            )
+        except (SurfaceError, PlaywrightError) as exc:
+            trace.emit("human_command_failed", kind=command.kind, error=str(exc))
+
+    def _resume_scan(
+        self,
+        capability: Capability,
+        params: dict[str, str],
+        surface: WebSurface,
+        current: int,
+        current_step: Step | None,
+    ) -> int:
+        """Forward position scan after a handback: checkpoint first (the human
+        may have completed the whole flow), then the furthest step whose
+        postconditions hold, else retry the current step — unless it is risky,
+        where a blind retry could double-fire; that fails loudly instead."""
+        total = len(capability.steps)
+        if all(
+            state_holds(surface, c, capability, params) for c in capability.checkpoint.all
+        ):
+            return total
+        for i in reversed(range(total)):
+            if self._step_post_holds(capability, params, surface, capability.steps[i]):
+                return i + 1
+        if current_step is not None and current_step.risk == "risky":
+            raise _StepFailed(
+                FailureReport(
+                    step_id=current_step.id,
+                    intent=current_step.intent,
+                    expected="a resume point that does not re-run a risky step",
+                    observed="no completed-step frontier found after handback; retrying a "
+                    "risky step blind could double-fire it",
+                )
+            )
+        return current
+
+    def _step_post_holds(
+        self,
+        capability: Capability,
+        params: dict[str, str],
+        surface: WebSurface,
+        step: Step,
+    ) -> bool:
+        resolved = None
+        if step.target is not None and any(
+            isinstance(c, ValueMatchesParam) for c in step.post
+        ):
+            try:
+                resolved = surface.resolve(step.target)
+            except (SurfaceError, PlaywrightError):
+                return False
+        return all(post_holds(surface, c, capability, params, resolved) for c in step.post)
 
     def _verify_checkpoint(
         self,

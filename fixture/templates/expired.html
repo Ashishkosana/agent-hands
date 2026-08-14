@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
-<h3>Session Expired</h3>
-<table border="0" cellpadding="4" cellspacing="0">
+<h3 style="border-bottom-color: #C9A227;">Session Expired</h3>
+<table border="0" cellpadding="4" cellspacing="0" style="background: #FFF9EA; border: 1px solid #D8B44A; border-left: 4px solid #C9A227; min-width: 340px;">
 <tr>
-<td><font size="2">Your session has timed out.</font></td>
+<td style="padding: 10px 12px 4px 12px;"><font size="2" style="font-size: 12px; color: #6B5518;">Your session has timed out.</font></td>
 </tr>
 <tr>
-<td>
+<td style="padding: 4px 12px 10px 12px;">
 <form method="post" action="/__continue">
 <input type="hidden" name="u1" value="{{ u1 }}">
 <input type="submit" value="Continue Session">

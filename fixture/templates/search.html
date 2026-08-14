@@ -4,16 +4,16 @@
 <tr>
 <td>
 <form method="post" action="/search">
-<table border="1" cellpadding="4" cellspacing="0" bordercolor="#808080" bgcolor="#F0F0F0">
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
 <tr>
-<td colspan="2" bgcolor="#D4D0C8"><b>Member Lookup</b></td>
+<td colspan="2" bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px;"><b>Member Lookup</b></td>
 </tr>
 <tr>
-<td>Member ID</td>
+<td bgcolor="#F4F7FA" style="background: #F4F7FA; color: #33475C; width: 110px;">Member ID</td>
 <td><input name="q1" size="20"></td>
 </tr>
 <tr>
-<td>&nbsp;</td>
+<td bgcolor="#F4F7FA" style="background: #F4F7FA;">&nbsp;</td>
 <td><input type="submit" value="Search"></td>
 </tr>
 </table>
@@ -21,25 +21,25 @@
 </td>
 </tr>
 <tr>
-<td><font size="2">Tip: if no member matches, verify the ID.</font></td>
+<td style="padding-top: 8px;"><font size="2" style="font-size: 11px; color: #52606D;">Tip: if no member matches, verify the ID.</font></td>
 </tr>
 </table>
 {% if err %}
 <br>
-<table border="1" cellpadding="4" cellspacing="0" bordercolor="#808080" bgcolor="#F0F0F0">
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#C08484" bgcolor="#FFFFFF" style="border: 1px solid #C08484; border-left: 4px solid #A33A3A; min-width: 340px;">
 <tr>
-<td bgcolor="#D4D0C8"><b>Input Errors</b></td>
+<td bgcolor="#F3DCDC" style="background: #F3DCDC; border-bottom: 1px solid #C08484; padding: 6px 10px;"><b style="color: #7C2B2B;">Input Errors</b></td>
 </tr>
 <tr>
-<td>Member ID must be numeric.</td>
+<td style="color: #5A2626;">Member ID must be numeric.</td>
 </tr>
 </table>
 {% endif %}
 {% if miss %}
 <br>
-<table border="1" cellpadding="4" cellspacing="0" bordercolor="#808080" bgcolor="#F0F0F0">
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
 <tr>
-<td bgcolor="#D4D0C8"><b>Search Results</b></td>
+<td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px;"><b>Search Results</b></td>
 </tr>
 <tr>
 <td>No member matches ID {{ q }}.</td>

@@ -1,19 +1,36 @@
 <html>
 <head>
 <title>Fairview Teller Console</title>
+<style type="text/css">
+body { margin: 0; background: #E4E7EB; color: #1F2933; font-family: Tahoma, Verdana, Arial, Helvetica, sans-serif; font-size: 12px; }
+table { border-collapse: collapse; font-size: 12px; color: #1F2933; }
+h3 { font-family: Tahoma, Verdana, Arial, Helvetica, sans-serif; font-size: 15px; color: #1B3A5C; margin: 4px 0 12px 0; padding-bottom: 5px; border-bottom: 1px solid #B7C2CE; letter-spacing: 0.3px; }
+b { color: #33475C; letter-spacing: 0.4px; }
+font { color: #52606D; }
+a { color: #1B3A5C; text-decoration: none; }
+a:hover { text-decoration: underline; }
+form { margin: 0; }
+input { font-family: Tahoma, Verdana, Arial, Helvetica, sans-serif; font-size: 12px; color: #1F2933; background: #FFFFFF; border: 1px solid #8A99AB; padding: 3px 5px; }
+input[type=submit] { background: #1B3A5C; color: #FFFFFF; border: 1px solid #0E2337; padding: 3px 16px; font-weight: bold; letter-spacing: 0.4px; cursor: pointer; }
+input[type=submit]:hover { background: #26507C; }
+input[type=submit]:active { background: #0E2337; }
+table[border="1"] { background: #FFFFFF; border: 1px solid #9AA8B8; }
+table[border="1"] td { border: 1px solid #D9E0E7; padding: 5px 10px; }
+</style>
 </head>
-<body bgcolor="#FFFFFF" text="#000000" link="#000080" vlink="#000080">
-<table width="100%" border="0" cellpadding="4" cellspacing="0">
+<body bgcolor="#E4E7EB" text="#1F2933" link="#1B3A5C" vlink="#1B3A5C">
+<table width="100%" border="0" cellpadding="0" cellspacing="0">
 <tr>
-<td bgcolor="#000080"><h3><font color="#FFFFFF">Fairview Teller Console</font></h3></td>
+<td bgcolor="#1B3A5C" width="1" style="background: #1B3A5C; padding: 9px 12px 9px 14px; white-space: nowrap; border-right: 1px solid #33587F;"><b style="color: #C9A227; font-family: Georgia, 'Times New Roman', Times, serif; font-size: 15px; letter-spacing: 2px;">&#9670; FAIRVIEW</b></td>
+<td bgcolor="#1B3A5C" style="background: #1B3A5C; padding: 9px 14px;"><h3 style="color: #FFFFFF; margin: 0; padding: 0; border: none; font-size: 15px; font-weight: normal; letter-spacing: 0.6px;"><font color="#FFFFFF" style="color: #FFFFFF;">Fairview Teller Console</font></h3></td>
 </tr>
 <tr>
-<td bgcolor="#808080"><font color="#FFFFFF" size="1">FAIRVIEW FEDERAL CREDIT UNION &#8212; INTERNAL USE ONLY &#8212; TELLER OPERATIONS</font></td>
+<td colspan="2" bgcolor="#12293F" style="background: #12293F; border-bottom: 3px solid #C9A227; padding: 4px 15px;"><font color="#7E93A9" size="1" style="color: #7E93A9; font-size: 10px; letter-spacing: 1.4px;">FAIRVIEW FEDERAL CREDIT UNION &#8212; INTERNAL USE ONLY &#8212; TELLER OPERATIONS</font></td>
 </tr>
 </table>
 <table width="100%" border="0" cellpadding="8" cellspacing="0">
 <tr>
-<td valign="top">
+<td valign="top" style="padding: 16px 18px;">
 {% block content %}{% endblock %}
 </td>
 </tr>

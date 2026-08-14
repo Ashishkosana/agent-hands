@@ -1,26 +1,26 @@
 {% extends "base.html" %}
 {% block content %}
 <h3>Member Details</h3>
-<table border="1" cellpadding="4" cellspacing="0" bordercolor="#808080" bgcolor="#F0F0F0">
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
 <tr>
-<td bgcolor="#D4D0C8">Member #</td>
-<td>{{ member_id }}</td>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C; width: 110px;">Member #</td>
+<td style="font-family: 'Courier New', Courier, monospace; font-weight: bold;">{{ member_id }}</td>
 </tr>
 <tr>
-<td bgcolor="#D4D0C8">Name</td>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Name</td>
 <td>{{ name }}</td>
 </tr>
 </table>
 <br>
-<table border="1" cellpadding="4" cellspacing="0" bordercolor="#808080" bgcolor="#F0F0F0">
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
 <tr>
-<td bgcolor="#D4D0C8"><b>Account</b></td>
-<td bgcolor="#D4D0C8"><b>Balance</b></td>
+<td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px; width: 200px;"><b>Account</b></td>
+<td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px; width: 140px;" align="right"><b>Balance</b></td>
 </tr>
 {% for label, balance in accounts %}
 <tr>
 <td>{{ label }}</td>
-<td align="right">{{ balance }}</td>
+<td align="right" style="font-family: 'Courier New', Courier, monospace;">{{ balance }}</td>
 </tr>
 {% endfor %}
 </table>

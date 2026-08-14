@@ -194,3 +194,56 @@ schema, replay engine, discovery, the three-way taxonomy, the escalation state
 machine, and the zero-LLM proof. Slice order was chosen so the
 highest-weighted deliverable — the replay contract — exists and stays runnable
 from day one.
+
+## Escalation & handoff (as built)
+
+**Q: Your operator console is a bare HTML page with five buttons. Is that the
+handoff the brief asked for?**
+
+The brief explicitly scopes the console out ("mock the operator UI if needed —
+make the handoff mechanism and the control-transfer model real"). What's real
+here: an engine-owned token with request/acknowledge semantics so two drivers
+on one session is impossible; interventions carrying step, reason, recent
+trace, params, and a screenshot; four attributed exits (take/hand back, approve,
+abort, resolve-as-declared-outcome); TTL expiry that closes the session;
+capture that records semantic descriptors with masked lengths; and a resume
+that position-scans forward because humans finish the screen they're on. The
+evidence folder has a live captured handoff ending in SUCCESS.
+
+**Q: Your canary test — did it ever actually catch anything?**
+
+Yes, during development: the first version leaked the sentinel through the
+FAILURE evidence path — an operator aborted, the engine captured an
+accessibility snapshot, and the human's typed text was still sitting in a
+field on the page. That's exactly the class of leak string-matching can't
+find. The fix suppresses page-content evidence once a human has driven the
+session; the refinement (element-level taint masking instead of suppression)
+is stated as next work. I'd rather show the canary catching a real bug than
+claim the redaction was right the first time.
+
+## Policy (as built)
+
+**Q: What stops a capability from wiring money unattended?**
+
+Three independent layers. The network allowlist means it can't even fetch
+beyond the entry host. The mutating-by-default rule means any step that fired
+a non-GET during discovery is recorded risky — observed through the page's
+reaction, because the POST usually fires after the driver call returns; that
+race was found in review and is now regression-tested. And risky steps refuse
+unattended replay unless a human signed the artifact, with the signature bound
+to the artifact hash — re-record it, or edit one step, and approval is void.
+The failure mode requires a human to miss it on an explicit sign-off, not a
+model to mislabel it silently.
+
+**Q: You cut the second tenant AND the public-site leg — your own design said
+never both. Defend that.**
+
+Guilty, and the report says so in those words. With a fixed budget the choice
+was between a second self-authored skin and depth on escalation, policy, and
+measured evals — which are the three highest-weighted criteria I hadn't yet
+proven. What stands in for generalization evidence: the drift eval (renamed
+label → loud failure listing every rung tried), per-step rung telemetry in
+every trace, and a schema with no web-specific field outside one flagged rung.
+If the interview wants it demonstrated, the overlay loader plus a divergent
+skin is the first item on the next-steps list, and the schema was shaped so
+that work is additive.

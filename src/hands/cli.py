@@ -35,7 +35,18 @@ def main(argv: list[str] | None = None) -> int:
     replay.add_argument("--headed", action="store_true", help="show the browser")
     replay.add_argument("--runs-dir", type=Path, default=Path("runs"))
 
+    discover_cmd = sub.add_parser(
+        "discover", help="LLM-driven discovery: learn a flow and record it as a capability"
+    )
+    discover_cmd.add_argument("request", type=Path, help="a discovery request JSON file")
+    discover_cmd.add_argument("--headed", action="store_true", help="show the browser")
+    discover_cmd.add_argument("--runs-dir", type=Path, default=Path("runs"))
+    discover_cmd.add_argument("--model", default=None, help="override the configured model")
+
     args = parser.parse_args(argv)
+
+    if args.command == "discover":
+        return _discover(parser, args)
 
     params: dict[str, str] = {}
     for item in args.param:
@@ -57,6 +68,29 @@ def main(argv: list[str] | None = None) -> int:
 
     print(_RESULT_ADAPTER.dump_json(result, indent=2).decode())
     return 0 if isinstance(result, (Success, BusinessOutcome)) else 1
+
+
+def _discover(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    # Imported here so the replay path never touches the model client — a
+    # property the hermetic zero-LLM test asserts on module level.
+    from hands.discover import DiscoveryFailed, discover, load_request, report_as_json
+    from hands.llm import LlmError, client_from_env
+
+    try:
+        request = load_request(args.request)
+    except (OSError, ValueError) as exc:
+        parser.error(f"cannot load discovery request: {exc}")
+    try:
+        model = client_from_env(model=args.model)
+    except LlmError as exc:
+        parser.error(str(exc))
+    try:
+        report = discover(request, model, runs_dir=args.runs_dir, headed=args.headed)
+    except DiscoveryFailed as exc:
+        print(f"discovery failed: {exc}", file=sys.stderr)
+        return 1
+    print(report_as_json(report))
+    return 0
 
 
 if __name__ == "__main__":

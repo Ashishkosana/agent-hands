@@ -30,7 +30,9 @@ def main() -> int:
     from hands.cli import main as cli_main
 
     code = cli_main(sys.argv[1:])
-    assert "anthropic" not in sys.modules, "model SDK was imported during replay"
+    forbidden = {"openai", "anthropic", "hands.llm", "hands.planner", "hands.discover"}
+    loaded = forbidden & set(sys.modules)
+    assert not loaded, f"model-side modules loaded during replay: {sorted(loaded)}"
     return code
 
 

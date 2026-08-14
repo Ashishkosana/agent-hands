@@ -42,7 +42,7 @@ strict = true
 python_version = "3.12"
 plugins = ["pydantic.mypy"]
 mypy_path = "src"
-packages = ["hands"]
+files = ["src/hands", "fixture", "tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

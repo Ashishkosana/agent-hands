@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Member Details</h3>
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#808080" bgcolor="#F0F0F0">
+<tr>
+<td bgcolor="#D4D0C8">Member #</td>
+<td>{{ member_id }}</td>
+</tr>
+<tr>
+<td bgcolor="#D4D0C8">Name</td>
+<td>{{ name }}</td>
+</tr>
+</table>
+<br>
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#808080" bgcolor="#F0F0F0">
+<tr>
+<td bgcolor="#D4D0C8"><b>Account</b></td>
+<td bgcolor="#D4D0C8"><b>Balance</b></td>
+</tr>
+{% for label, balance in accounts %}
+<tr>
+<td>{{ label }}</td>
+<td align="right">{{ balance }}</td>
+</tr>
+{% endfor %}
+</table>
+{% endblock %}

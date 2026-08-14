@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<table border="0" cellpadding="4" cellspacing="0">
+<tr>
+<td>
+<form method="post" action="/search">
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#808080" bgcolor="#F0F0F0">
+<tr>
+<td colspan="2" bgcolor="#D4D0C8"><b>Member Lookup</b></td>
+</tr>
+<tr>
+<td>Member ID</td>
+<td><input name="q1" size="20"></td>
+</tr>
+<tr>
+<td>&nbsp;</td>
+<td><input type="submit" value="Search"></td>
+</tr>
+</table>
+</form>
+</td>
+</tr>
+<tr>
+<td><font size="2">Tip: if no member matches, verify the ID.</font></td>
+</tr>
+</table>
+{% if miss %}
+<br>
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#808080" bgcolor="#F0F0F0">
+<tr>
+<td bgcolor="#D4D0C8"><b>Search Results</b></td>
+</tr>
+<tr>
+<td>No member matches ID {{ q }}.</td>
+</tr>
+</table>
+{% endif %}
+{% endblock %}

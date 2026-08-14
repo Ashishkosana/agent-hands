@@ -74,6 +74,8 @@ FAULTS: dict[str, bool] = {
     "session_expired": False,
     "interstitial": False,
     "app_error": False,
+    # UI drift stand-in: the search field's label renders as "Member Number".
+    "renamed_label": False,
 }
 
 SLOW_LOAD_SECONDS = 5.0
@@ -146,7 +148,13 @@ def create_app() -> Flask:
         q = request.args.get("q", "")
         miss = request.args.get("miss") == "1"
         err = request.args.get("err") == "1"
-        return render_template("search.html", q=q, miss=miss, err=err)
+        return render_template(
+            "search.html",
+            q=q,
+            miss=miss,
+            err=err,
+            id_label="Member Number" if FAULTS["renamed_label"] else "Member ID",
+        )
 
     @app.post("/search")
     def search_post() -> str | Response:

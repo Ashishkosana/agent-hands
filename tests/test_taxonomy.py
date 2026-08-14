@@ -177,3 +177,18 @@ class _NullTrace:
 
     def emit(self, event: str, **fields: object) -> None:
         pass
+
+
+def test_ui_drift_fails_loud_never_guesses(
+    capability: Capability, fixture_app: str, tmp_path: Path
+) -> None:
+    """Secondary per the brief: UI drift. A renamed label exhausts every
+    ladder rung and the run fails LOUDLY, listing what was tried — in a
+    stable-UI environment the drift answer is detect + fail-safe + telemetry,
+    never a guessed click."""
+    set_fault(fixture_app, "renamed_label", True)
+    result = engine(tmp_path).run(capability, {"member_id": "12345"})
+    assert isinstance(result, Failure)
+    assert result.report.step_id == "s1"
+    assert "no rung matched" in result.report.observed
+    assert "Member ID" in result.report.observed  # what it tried, human-readable

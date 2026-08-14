@@ -18,6 +18,7 @@ from hands.artifact import (
     PostCondition,
     RegionTextMatch,
     RegionTextMatchesParam,
+    RoleNameAbsent,
     RoleNameMatch,
     RoleNameVisible,
     StateCondition,
@@ -45,6 +46,8 @@ def describe_state(cond: StateCondition | PostCondition) -> str:
     """Human-readable rendering, used in failure reports and traces."""
     if isinstance(cond, RoleNameVisible):
         return f"a visible {cond.role} named {cond.name!r}"
+    if isinstance(cond, RoleNameAbsent):
+        return f"no visible {cond.role} named {cond.name!r}"
     if isinstance(cond, TextVisible):
         return f"visible text {cond.text!r}"
     if isinstance(cond, UrlMatches):
@@ -66,6 +69,10 @@ def state_holds(
             frame = surface.frame_for(cond.context)
             matches = frame.get_by_role(cond.role, name=cond.name, exact=True)  # type: ignore[arg-type]
             return _any_visible(matches)
+        if isinstance(cond, RoleNameAbsent):
+            frame = surface.frame_for(cond.context)
+            gone = frame.get_by_role(cond.role, name=cond.name, exact=True)  # type: ignore[arg-type]
+            return not _any_visible(gone)
         if isinstance(cond, TextVisible):
             frame = surface.frame_for(cond.context)
             return _any_visible(frame.get_by_text(cond.text, exact=True))
@@ -114,7 +121,10 @@ def check_recognizers(
     answering the current one).
     """
     for condition in armed:
-        if condition.id in suppressed:
+        # Freshness suppression exists to prevent stale state from producing
+        # a wrong ANSWER; a recoverable condition is a blocking state, and
+        # its presence before the action is exactly when it needs handling.
+        if condition.classify == "business_outcome" and condition.id in suppressed:
             continue
         evidence = _match(surface, capability, condition)
         if evidence is not None:

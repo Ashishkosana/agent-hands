@@ -35,6 +35,7 @@ from hands.artifact import (
     dump_capability,
 )
 from hands.conditions import (
+    RecognizerHit,
     check_recognizers,
     describe_state,
     matching_now,
@@ -81,6 +82,16 @@ class _Recognized(Exception):
 class _StepFailed(Exception):
     def __init__(self, report: FailureReport) -> None:
         self.report = report
+
+
+class _Recover(Exception):
+    """Internal control flow: an armed RECOVERABLE recognizer matched.
+    ``acted`` records whether the current step's action had already run —
+    the difference between a safe retry and a forbidden risky re-fire."""
+
+    def __init__(self, hit: RecognizerHit, acted: bool) -> None:
+        self.hit = hit
+        self.acted = acted
 
 
 class ReplayEngine:
@@ -135,14 +146,39 @@ class ReplayEngine:
             return unmet
 
         step_order = {step.id: i for i, step in enumerate(capability.steps)}
+        fires: dict[str, int] = {}
         suppressed: set[str] = set()
-        for index, step in enumerate(capability.steps):
+        total = len(capability.steps)
+        index = 0
+        # The index loop exists for recovery resume semantics: a recoverable
+        # condition may retry the current step or restart from an earlier one,
+        # bounded by per-condition fire caps. index == total is the checkpoint
+        # phase (a pseudo-step recovery may also resume into).
+        while index <= total:
+            if index == total:
+                try:
+                    self._verify_checkpoint(capability, params, surface, trace, suppressed)
+                except _Recover as rec:
+                    index = self._recover(
+                        capability, params, surface, trace, rec, fires, step_order,
+                        current=index, step=None,
+                    )
+                    continue
+                break
+            step = capability.steps[index]
             armed = [
                 c for c in capability.conditions if step_order[c.armed_after] <= index
             ]
-            suppressed = self._run_step(capability, params, surface, trace, step, armed)
+            try:
+                suppressed = self._run_step(capability, params, surface, trace, step, armed)
+            except _Recover as rec:
+                index = self._recover(
+                    capability, params, surface, trace, rec, fires, step_order,
+                    current=index, step=step,
+                )
+                continue
+            index += 1
 
-        self._verify_checkpoint(capability, params, surface, trace, suppressed)
         outputs = self._extract_outputs(capability, surface, trace)
         return Success(outputs=outputs)
 
@@ -182,11 +218,15 @@ class ReplayEngine:
             trace.emit("fragile_target_warning", step=step.id)
         deadline = time.monotonic() + self.config.step_budget_s
 
-        # Freshness snapshot: recognizers already matching BEFORE this step's
-        # action are stale state and may not classify this step's result.
-        # Suppression lifts once the stale state is observed GONE — a fresh
-        # match of the same recognizer afterwards is a real, new signal.
-        suppressed = matching_now(surface, capability, armed)
+        # Freshness snapshot (business outcomes only): a recognizer already
+        # matching BEFORE this step's action is stale state and may not
+        # classify the step's result. Suppression lifts once the stale state
+        # is observed GONE. Recoverable conditions are never suppressed — a
+        # blocking state present before the action is exactly what recovery
+        # exists for.
+        suppressed = matching_now(
+            surface, capability, [c for c in armed if c.classify == "business_outcome"]
+        )
         if suppressed:
             trace.emit("recognizers_suppressed_stale", step=step.id, ids=sorted(suppressed))
 
@@ -212,7 +252,7 @@ class ReplayEngine:
         attempts = 0
         while True:
             self._refresh_suppression(capability, surface, trace, armed, suppressed)
-            self._poll_recognizers(capability, surface, trace, armed, suppressed)
+            self._poll_recognizers(capability, surface, trace, armed, suppressed, acted=False)
             try:
                 resolved = self._resolve_and_check_pre(surface, step)
                 self._perform(surface, step, resolved, params)
@@ -311,7 +351,7 @@ class ReplayEngine:
                 trace.emit("postconditions_met", step=step.id)
                 return
             self._refresh_suppression(capability, surface, trace, armed, suppressed)
-            self._poll_recognizers(capability, surface, trace, armed, suppressed)
+            self._poll_recognizers(capability, surface, trace, armed, suppressed, acted=True)
             if time.monotonic() >= deadline:
                 expected = " AND ".join(describe_state(c) for c in step.post)
                 raise _StepFailed(
@@ -331,23 +371,126 @@ class ReplayEngine:
         trace: Trace,
         armed: list[Condition],
         suppressed: set[str],
+        acted: bool,
     ) -> None:
         hit = check_recognizers(surface, capability, armed, suppressed)
         if hit is None:
             return
+        if hit.condition.classify == "recoverable":
+            raise _Recover(hit, acted=acted)
+        code = hit.condition.outcome_code
+        assert code is not None  # guaranteed by the schema validator
         trace.emit(
             "recognizer_fired",
             condition=hit.condition.id,
-            outcome=hit.condition.outcome_code,
+            outcome=code,
             matched=hit.evidence.matched_text,
         )
         raise _Recognized(
             BusinessOutcome(
-                code=hit.condition.outcome_code,
-                description=capability.outcomes[hit.condition.outcome_code].description,
+                code=code,
+                description=capability.outcomes[code].description,
                 evidence=hit.evidence,
             )
         )
+
+    def _recover(
+        self,
+        capability: Capability,
+        params: dict[str, str],
+        surface: WebSurface,
+        trace: Trace,
+        rec: _Recover,
+        fires: dict[str, int],
+        step_order: dict[str, int],
+        current: int,
+        step: Step | None,
+    ) -> int:
+        """Handle a recoverable condition: bounded, deliberate, loud on
+        exhaustion. Returns the step index to resume at."""
+        cond = rec.hit.condition
+        count = fires.get(cond.id, 0) + 1
+        fires[cond.id] = count
+        trace.emit(
+            "recognizer_fired",
+            condition=cond.id,
+            classify="recoverable",
+            matched=rec.hit.evidence.matched_text,
+            fire=count,
+        )
+        if count > cond.max_fires_per_run:
+            raise _StepFailed(
+                FailureReport(
+                    step_id=step.id if step is not None else None,
+                    intent=f"recover from condition {cond.id!r}",
+                    expected=f"at most {cond.max_fires_per_run} recoveries per run",
+                    observed=f"condition {cond.id!r} fired {count} times — recovery cap exhausted",
+                )
+            )
+        if rec.acted and step is not None and step.risk == "risky":
+            # Re-running the step after its action may already have landed
+            # server-side would double-fire an irreversible action. Recovery
+            # cannot make that safe; a human can (escalation, next slice).
+            raise _StepFailed(
+                FailureReport(
+                    step_id=step.id,
+                    intent=step.intent,
+                    expected="a risky step is never auto-retried after its action ran",
+                    observed=f"recoverable condition {cond.id!r} interrupted a risky step "
+                    f"post-action; escalation to a human is the safe path",
+                )
+            )
+        self._run_recovery(capability, params, surface, trace, cond)
+        if cond.resume == "retry_current_step":
+            return current
+        assert cond.restart_from is not None  # guaranteed by the schema validator
+        return step_order[cond.restart_from]
+
+    def _run_recovery(
+        self,
+        capability: Capability,
+        params: dict[str, str],
+        surface: WebSurface,
+        trace: Trace,
+        cond: Condition,
+    ) -> None:
+        """Execute a condition's recovery steps: single-attempt actions,
+        bounded postcondition waits, and NO recognizer matching (one level of
+        recovery, never nested). Any problem promotes to a hard FAILURE that
+        names the original condition — the fourth, unnamed state the taxonomy
+        must not have."""
+        for rstep in cond.recovery:
+            trace.emit(
+                "recovery_step_started", condition=cond.id, step=rstep.id, intent=rstep.intent
+            )
+            try:
+                resolved = self._resolve_and_check_pre(surface, rstep)
+                self._perform(surface, rstep, resolved, params)
+            except (SurfaceError, PlaywrightError, ValueError_) as exc:
+                raise _StepFailed(
+                    FailureReport(
+                        step_id=rstep.id,
+                        intent=f"recovery for {cond.id!r}: {rstep.intent}",
+                        expected=self._describe_target(rstep),
+                        observed=str(exc),
+                    )
+                ) from exc
+            deadline = time.monotonic() + self.config.step_budget_s
+            while not all(
+                post_holds(surface, c, capability, params, resolved) for c in rstep.post
+            ):
+                if time.monotonic() >= deadline:
+                    expected = " AND ".join(describe_state(c) for c in rstep.post)
+                    raise _StepFailed(
+                        FailureReport(
+                            step_id=rstep.id,
+                            intent=f"recovery for {cond.id!r}: {rstep.intent}",
+                            expected=expected,
+                            observed=f"recovery postconditions unmet at {surface.page.url}",
+                        )
+                    )
+                time.sleep(self.config.poll_interval_s)
+            trace.emit("recovery_step_done", condition=cond.id, step=rstep.id)
 
     def _refresh_suppression(
         self,
@@ -409,7 +552,7 @@ class ReplayEngine:
                 trace.emit("checkpoint_verified")
                 return
             self._refresh_suppression(capability, surface, trace, armed, suppressed)
-            self._poll_recognizers(capability, surface, trace, armed, suppressed)
+            self._poll_recognizers(capability, surface, trace, armed, suppressed, acted=True)
             if time.monotonic() >= deadline:
                 expected = " AND ".join(describe_state(c) for c in pending)
                 raise _StepFailed(

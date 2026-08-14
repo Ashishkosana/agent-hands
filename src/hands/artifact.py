@@ -168,6 +168,18 @@ class UrlMatches(_Model):
     context: list[ContextSegment] = Field(default_factory=list)
 
 
+class RoleNameAbsent(_Model):
+    """The negative condition recovery needs: proof that a blocking state is
+    GONE ("the Session Expired heading is no longer visible") — the only
+    postcondition a dismiss/continue action can truthfully claim, since the
+    page it lands on depends on where the flow was interrupted."""
+
+    kind: Literal["role_name_absent"] = "role_name_absent"
+    role: str
+    name: str
+    context: list[ContextSegment] = Field(default_factory=list)
+
+
 class RegionTextMatchesParam(_Model):
     """Identity binding: the named region's text must contain the invocation's
     parameter value. This is what turns "a details page loaded" into "the
@@ -179,7 +191,7 @@ class RegionTextMatchesParam(_Model):
 
 
 StateCondition = Annotated[
-    RoleNameVisible | TextVisible | UrlMatches | RegionTextMatchesParam,
+    RoleNameVisible | RoleNameAbsent | TextVisible | UrlMatches | RegionTextMatchesParam,
     Field(discriminator="kind"),
 ]
 
@@ -194,7 +206,12 @@ class ValueMatchesParam(_Model):
 
 
 PostCondition = Annotated[
-    ValueMatchesParam | RoleNameVisible | TextVisible | UrlMatches | RegionTextMatchesParam,
+    ValueMatchesParam
+    | RoleNameVisible
+    | RoleNameAbsent
+    | TextVisible
+    | UrlMatches
+    | RegionTextMatchesParam,
     Field(discriminator="kind"),
 ]
 
@@ -229,19 +246,53 @@ ConditionMatch = Annotated[RegionTextMatch | RoleNameMatch, Field(discriminator=
 
 Provenance = Literal["discovered", "authored"]
 
+Classification = Literal["business_outcome", "recoverable"]
+
+ResumePoint = Literal["retry_current_step", "restart_from"]
+
 
 class Condition(_Model):
     """A recognizer for a known runtime state. Armed from the action of step
-    ``armed_after`` onward — scoping plus the engine's freshness rule prevent
-    stale or incidental matches from producing a confident wrong answer."""
+    ``armed_after`` onward.
+
+    Two classes: a *business outcome* ends the run with an answer (freshness
+    rule applies — a match present before the action may not classify it);
+    a *recoverable* condition is a blocking state handled in place (presence
+    before the action is exactly when it needs handling, so no suppression),
+    bounded by ``max_fires_per_run``, with an explicit resume point — plain
+    "continue" is wrong whenever recovery navigates."""
 
     id: str
     armed_after: str
     match: ConditionMatch
-    classify: Literal["business_outcome"]
-    outcome_code: str
+    classify: Classification
+    outcome_code: str | None = None
+    recovery: list[Step] = Field(default_factory=list)
+    resume: ResumePoint | None = None
+    restart_from: str | None = None
+    max_fires_per_run: int = Field(default=2, ge=0)
     provenance: Provenance
     verified_by_eval: bool = False
+
+    @model_validator(mode="after")
+    def _class_coherence(self) -> Condition:
+        if self.classify == "business_outcome":
+            if self.outcome_code is None:
+                raise ValueError(f"condition {self.id!r}: business outcome requires outcome_code")
+            if self.recovery or self.resume or self.restart_from:
+                raise ValueError(f"condition {self.id!r}: an outcome is an answer, not a recovery")
+        else:
+            if self.outcome_code is not None:
+                raise ValueError(f"condition {self.id!r}: recoverable conditions have no outcome")
+            if not self.recovery:
+                raise ValueError(f"condition {self.id!r}: recoverable requires recovery steps")
+            if self.resume is None:
+                raise ValueError(f"condition {self.id!r}: recoverable requires a resume point")
+            if (self.resume == "restart_from") != (self.restart_from is not None):
+                raise ValueError(
+                    f"condition {self.id!r}: restart_from must be set iff resume is restart_from"
+                )
+        return self
 
 
 # --------------------------------------------------------------------------- steps
@@ -364,11 +415,15 @@ class Capability(_Model):
         if len(step_ids) != len(set(step_ids)):
             raise ValueError("step ids must be unique")
 
-        # Outcome closure, both directions: every recognizer maps to a declared
-        # code, and every declared code is reachable by some recognizer. The
+        # Outcome closure, both directions: every business-outcome recognizer
+        # maps to a declared code, and every declared code is reachable. The
         # caller's contract and the artifact's behavior cannot drift apart.
         declared = set(self.outcomes)
-        referenced = {c.outcome_code for c in self.conditions}
+        referenced = {
+            c.outcome_code
+            for c in self.conditions
+            if c.classify == "business_outcome" and c.outcome_code is not None
+        }
         if undeclared := referenced - declared:
             raise ValueError(f"conditions reference undeclared outcome codes: {sorted(undeclared)}")
         if unreachable := declared - referenced:
@@ -378,6 +433,11 @@ class Capability(_Model):
         for cond in self.conditions:
             if cond.armed_after not in known_steps:
                 raise ValueError(f"condition {cond.id!r}: armed_after references unknown step")
+            if cond.restart_from is not None and cond.restart_from not in known_steps:
+                raise ValueError(f"condition {cond.id!r}: restart_from references unknown step")
+            recovery_ids = [s.id for s in cond.recovery]
+            if len(recovery_ids) != len(set(recovery_ids)):
+                raise ValueError(f"condition {cond.id!r}: recovery step ids must be unique")
 
         # Region references must resolve.
         known_regions = set(self.regions)

@@ -23,7 +23,7 @@ import hashlib
 import json
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
 
@@ -34,6 +34,7 @@ from hands.artifact import (
     TypeAction,
     ValueMatchesParam,
     dump_capability,
+    risk_review_valid,
 )
 from hands.conditions import (
     RecognizerHit,
@@ -57,6 +58,7 @@ from hands.results import (
     FailureReport,
     MatchEvidence,
     OutputValue,
+    PolicyViolation,
     PreconditionFailed,
     ReplayResult,
     Success,
@@ -83,6 +85,19 @@ class EscalationSettings:
 
 
 @dataclass
+class PolicySettings:
+    """Guardrails, enforced — not requested of anything in a prompt.
+
+    ``allowed_hosts`` defaults to exactly the artifact's entry host; every
+    request the browser makes (clicks, redirects, popups, subresources) is
+    checked at the network layer. ``require_risk_review`` gates unattended
+    replay of risky steps on a human-signed, hash-bound review."""
+
+    allowed_hosts: list[str] | None = None  # None -> derive from entry URL
+    require_risk_review: bool = True
+
+
+@dataclass
 class EngineConfig:
     headed: bool = False
     runs_dir: Path = Path("runs")
@@ -91,6 +106,7 @@ class EngineConfig:
     poll_interval_s: float = 0.25
     attempt_timeout_ms: int = 2000
     escalation: EscalationSettings | None = None
+    policy: PolicySettings = field(default_factory=PolicySettings)
 
 
 class _Recognized(Exception):
@@ -126,6 +142,22 @@ class ReplayEngine:
 
     def run(self, capability: Capability, params: dict[str, str]) -> ReplayResult:
         self._validate_params(capability, params)
+        # The mutating-by-default posture's teeth: risky steps do not replay
+        # unattended until a human has reviewed the diffable artifact and
+        # signed it — and the signature binds to the artifact hash, so
+        # re-recording invalidates prior approval. Attended runs are exempt:
+        # a human is already in the loop.
+        if (
+            self.config.policy.require_risk_review
+            and self.config.escalation is None
+            and any(step.risk == "risky" for step in capability.steps)
+            and not risk_review_valid(capability)
+        ):
+            return PolicyViolation(
+                rule="unattended_risky_requires_review",
+                detail="capability has risky steps and no valid signed risk review "
+                "(sign with: hands review <artifact> --operator <name>)",
+            )
         run_dir = new_run_dir(self.config.runs_dir, capability.name)
         surface = WebSurface(
             headed=self.config.headed, attempt_timeout_ms=self.config.attempt_timeout_ms
@@ -156,12 +188,29 @@ class ReplayEngine:
                         trace.emit("human_action", **event)
 
             self._hub = hub
+            from urllib.parse import urlparse
+
+            entry_url = capability.target.entry.web.url
+            allowed_hosts = self.config.policy.allowed_hosts or [urlparse(entry_url).netloc]
             try:
-                surface.start(capability.target.entry.web.url, on_human_event=on_human_event)
+                surface.start(
+                    entry_url, on_human_event=on_human_event, allowed_hosts=allowed_hosts
+                )
                 result = self._execute(capability, params, surface, trace, run_dir)
+                if surface.blocked_requests:
+                    trace.emit("policy_blocked_requests", urls=surface.blocked_requests[:10])
             except _Recognized as hit:
                 result = hit.outcome
             except _StepFailed as failed:
+                if surface.blocked_requests:
+                    result = PolicyViolation(
+                        rule="off_allowlist_traffic",
+                        detail=f"blocked {len(surface.blocked_requests)} request(s) outside "
+                        f"the allowlist, e.g. {surface.blocked_requests[0]}; the flow could "
+                        f"not proceed",
+                    )
+                    trace.emit("run_finished", result=_masked_result(capability, result))
+                    return result
                 # Page-content evidence is suppressed once a human has driven
                 # the session: what they entered may still sit in page state,
                 # and a screenshot/snapshot would persist it. (Element-level

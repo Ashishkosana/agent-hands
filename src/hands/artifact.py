@@ -499,6 +499,26 @@ class Capability(_Model):
         return self
 
 
+def risk_hash(capability: Capability) -> str:
+    """Hash of the artifact CONTENT a risk review signs — everything except
+    the signature block itself. Any change to steps, ladders, or contract
+    invalidates prior approval; re-recording requires re-review."""
+    import hashlib
+
+    unsigned = capability.model_copy(update={"risk_review": RiskReview()})
+    return hashlib.sha256(dump_capability(unsigned).encode()).hexdigest()
+
+
+def sign_risk_review(capability: Capability, reviewed_by: str) -> Capability:
+    review = RiskReview(reviewed_by=reviewed_by, artifact_hash=risk_hash(capability))
+    return capability.model_copy(update={"risk_review": review})
+
+
+def risk_review_valid(capability: Capability) -> bool:
+    review = capability.risk_review
+    return review.reviewed_by is not None and review.artifact_hash == risk_hash(capability)
+
+
 def load_capability(path: Path) -> Capability:
     return Capability.model_validate_json(path.read_text())
 

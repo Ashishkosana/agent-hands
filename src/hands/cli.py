@@ -13,7 +13,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 from hands.artifact import load_capability
-from hands.replay import EngineConfig, ReplayEngine
+from hands.replay import EngineConfig, EscalationSettings, ReplayEngine
 from hands.results import BusinessOutcome, ReplayResult, Success
 
 _RESULT_ADAPTER: TypeAdapter[ReplayResult] = TypeAdapter(ReplayResult)
@@ -34,6 +34,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     replay.add_argument("--headed", action="store_true", help="show the browser")
     replay.add_argument("--runs-dir", type=Path, default=Path("runs"))
+    replay.add_argument(
+        "--attended",
+        action="store_true",
+        help="failures raise an intervention for a human operator instead of returning",
+    )
+    replay.add_argument("--console-port", type=int, default=8321)
+    replay.add_argument("--ttl", type=float, default=300.0, help="intervention TTL seconds")
+
+    review = sub.add_parser(
+        "review", help="sign a capability's risk labels after reviewing the artifact"
+    )
+    review.add_argument("artifact", type=Path)
+    review.add_argument("--operator", required=True, help="reviewer identity, recorded")
 
     discover_cmd = sub.add_parser(
         "discover", help="LLM-driven discovery: learn a flow and record it as a capability"
@@ -47,6 +60,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "discover":
         return _discover(parser, args)
+    if args.command == "review":
+        return _review(parser, args)
 
     params: dict[str, str] = {}
     for item in args.param:
@@ -60,7 +75,15 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError) as exc:
         parser.error(f"cannot load artifact: {exc}")
 
-    engine = ReplayEngine(EngineConfig(headed=args.headed, runs_dir=args.runs_dir))
+    escalation = None
+    if args.attended:
+        escalation = EscalationSettings(ttl_s=args.ttl, console_port=args.console_port)
+        print(
+            f"operator console: http://127.0.0.1:{args.console_port}/", file=sys.stderr
+        )
+    engine = ReplayEngine(
+        EngineConfig(headed=args.headed, runs_dir=args.runs_dir, escalation=escalation)
+    )
     try:
         result = engine.run(capability, params)
     except ValueError as exc:  # parameter validation: a caller bug, not a run result
@@ -68,6 +91,26 @@ def main(argv: list[str] | None = None) -> int:
 
     print(_RESULT_ADAPTER.dump_json(result, indent=2).decode())
     return 0 if isinstance(result, (Success, BusinessOutcome)) else 1
+
+
+def _review(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    """Sign an artifact's risk labels. The reviewer is asserting they read
+    the diffable step list; the signature binds to the artifact hash, so any
+    later change invalidates it."""
+    from hands.artifact import dump_capability, sign_risk_review
+
+    try:
+        capability = load_capability(args.artifact)
+    except (OSError, ValueError) as exc:
+        parser.error(f"cannot load artifact: {exc}")
+    risky = [s.id for s in capability.steps if s.risk == "risky"]
+    signed = sign_risk_review(capability, args.operator)
+    args.artifact.write_text(dump_capability(signed))
+    print(
+        f"signed by {args.operator!r}: {len(risky)} risky step(s) {risky}, "
+        f"hash {signed.risk_review.artifact_hash[:16] if signed.risk_review.artifact_hash else ''}…"
+    )
+    return 0
 
 
 def _discover(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:

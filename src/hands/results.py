@@ -63,7 +63,17 @@ class PreconditionFailed(BaseModel):
     observed: str
 
 
+class PolicyViolation(BaseModel):
+    """The guardrails stopped the run — off-allowlist traffic, or an
+    unattended replay of risky steps without a signed risk review. Distinct
+    from Failure: the flow didn't break; policy refused it."""
+
+    result: Literal["policy_violation"] = "policy_violation"
+    rule: str
+    detail: str
+
+
 ReplayResult = Annotated[
-    Success | BusinessOutcome | Failure | PreconditionFailed,
+    Success | BusinessOutcome | Failure | PreconditionFailed | PolicyViolation,
     Field(discriminator="result"),
 ]

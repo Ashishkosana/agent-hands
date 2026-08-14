@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from hands.artifact import load_capability
+from hands.artifact import load_capability, sign_risk_review
 from hands.discover import DiscoveryRequest, discover, load_request
 from hands.llm import LlmTurn, Message, ToolCall, ToolSpec
 from hands.replay import EngineConfig, ReplayEngine
@@ -209,6 +209,10 @@ def test_discovery_produces_an_artifact_replay_can_execute(
     assert "relative" in strategies
     # The search submit POSTs: the mutating-by-default rule marks it risky.
     assert capability.steps[-1].risk == "risky"
+
+    # A risky step means the unattended-replay gate applies: this test now
+    # plays the reviewing human (the gate itself is covered in test_policy).
+    capability = sign_risk_review(capability, "test-reviewer")
 
     # The real test: REPLAY the discovered artifact with FRESH parameters.
     engine = ReplayEngine(EngineConfig(runs_dir=tmp_path / "replay-runs"))

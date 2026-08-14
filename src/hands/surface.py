@@ -17,6 +17,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 from playwright.sync_api import (
     Browser,
@@ -24,9 +25,11 @@ from playwright.sync_api import (
     Locator,
     Page,
     Playwright,
+    Route,
     sync_playwright,
 )
 from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import Request as PwRequest
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from hands.artifact import (
@@ -171,10 +174,27 @@ class WebSurface:
         self,
         entry_url: str,
         on_human_event: Callable[[dict[str, object]], None] | None = None,
+        allowed_hosts: list[str] | None = None,
     ) -> None:
         self._playwright = sync_playwright().start()
         self._browser = self._playwright.chromium.launch(headless=not self._headed)
         self._page = self._browser.new_page()
+        self.blocked_requests: list[str] = []
+        if allowed_hosts is not None:
+            allowed = set(allowed_hosts)
+
+            def enforce(route: Route, request: PwRequest) -> None:
+                host = urlparse(request.url).netloc
+                if host in allowed:
+                    route.continue_()
+                else:
+                    self.blocked_requests.append(request.url)
+                    route.abort()
+
+            # Network-layer enforcement: context-wide routing covers every
+            # request — clicks, redirects, popups, iframes, subresources —
+            # not just navigations the engine initiates itself.
+            self._page.route("**/*", enforce)
         if on_human_event is not None:
             self._page.expose_binding(
                 "__handsHumanEvent",

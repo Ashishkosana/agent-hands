@@ -64,8 +64,10 @@ def test_wrong_params_rejected_before_any_browser_work(
 
     with pytest.raises(ValueError, match="missing parameters"):
         engine(tmp_path).run(capability, {})
+    # "abc" passes the (deliberately loose) client-side pattern so the SERVER
+    # can be the validation authority — see test_taxonomy. This one can't:
     with pytest.raises(ValueError, match="does not match pattern"):
-        engine(tmp_path).run(capability, {"member_id": "abc"})
+        engine(tmp_path).run(capability, {"member_id": "far-too-long-for-the-pattern"})
 
 
 def test_trace_records_rung_telemetry_and_masks_sensitive_outputs(

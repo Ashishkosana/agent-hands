@@ -10,6 +10,8 @@ Fairview Teller fixture app. All data is fake seed data.
 | `discovery-run-outcome/` | the second discovery leg, run with a member ID known not to exist, ending in `report_outcome(MEMBER_NOT_FOUND)` — this is where the artifact's not-found recognizer comes from |
 | `replay-run/` | deterministic replay of `artifact.json` with a **fresh** parameter (member 67890, which no discovery run ever saw) → `SUCCESS` with the typed balance |
 | `replay-run-not-found/` | replay with a missing member → `BUSINESS_OUTCOME MEMBER_NOT_FOUND`, an answer, not a crash — with the matched region text as auditable evidence |
+| `replay-run-recovered/` | replay with an injected session expiry: the recognizer fires, the engine clicks Continue Session, verifies the state is gone, retries the step, and the run **succeeds** — recovered and logged, never surfaced as failure |
+| `replay-run-validation/` | replay with input the server rejects → `BUSINESS_OUTCOME VALIDATION_REJECTED` |
 | `discovery-report.json` | run metrics: endings, step counts, LLM calls, token usage, wall-clock |
 
 Replay involves no model: no `llm_call` events appear in either replay trace,

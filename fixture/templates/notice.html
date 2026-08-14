@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Notice</h3>
+<table border="0" cellpadding="4" cellspacing="0">
+<tr>
+<td><font size="2">Scheduled maintenance this weekend.</font></td>
+</tr>
+<tr>
+<td>
+<form method="post" action="/__dismiss">
+<input type="submit" value="Dismiss">
+</form>
+</td>
+</tr>
+</table>
+{% endblock %}

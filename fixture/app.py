@@ -10,6 +10,7 @@ Run with: python -m fixture.app --port 8123
 from __future__ import annotations
 
 import argparse
+import re
 import time
 from dataclasses import dataclass
 from decimal import Decimal
@@ -61,19 +62,53 @@ MEMBERS: dict[str, Member] = {
     ),
 }
 
-# Fault-injection registry. Toggled at runtime via /__faults. Later slices
-# add more faults (not_found_all, permission_denied, session_expired,
-# interstitial) as new keys here plus simple checks in the views.
+# Fault-injection registry. Toggled at runtime via /__faults.
+#
+# Precedence when several faults are enabled at once:
+#   1. session_expired -- intercepts /search and /member/* entirely
+#   2. interstitial    -- intercepts GET /search
+#   3. permission_denied / app_error / slow_load -- apply on /member/<id>
 FAULTS: dict[str, bool] = {
     "slow_load": False,
+    "permission_denied": False,
+    "session_expired": False,
+    "interstitial": False,
+    "app_error": False,
 }
 
 SLOW_LOAD_SECONDS = 5.0
+
+# A member ID as accepted by the search form: one to ten ASCII digits.
+MEMBER_ID_RE = re.compile(r"[0-9]{1,10}")
 
 
 def format_money(amount: Decimal) -> str:
     """Format a balance like ``$1,234.50``."""
     return f"${amount:,.2f}"
+
+
+def _session_expired_page() -> str | None:
+    """The Session Expired interstitial for the current request, if active.
+
+    Returns None when the session_expired fault is off. The page carries the
+    originally requested URL in a hidden ``u1`` field so POST /__continue can
+    send the operator back where they were going.
+    """
+    if not FAULTS["session_expired"]:
+        return None
+    target = request.path
+    if request.query_string:
+        target = f"{request.path}?{request.query_string.decode('latin-1')}"
+    return render_template("expired.html", u1=target)
+
+
+def _is_safe_relative_path(target: str) -> bool:
+    """True for a same-site relative path like ``/member/12345``.
+
+    Rejects scheme-relative (``//host``) and backslash tricks so /__continue
+    cannot be used as an open redirect.
+    """
+    return target.startswith("/") and not target.startswith("//") and "\\" not in target
 
 
 def _parse_enabled(value: object) -> bool | None:
@@ -103,28 +138,60 @@ def create_app() -> Flask:
 
     @app.get("/search")
     def search_get() -> str:
+        expired = _session_expired_page()
+        if expired is not None:
+            return expired
+        if FAULTS["interstitial"]:
+            return render_template("notice.html")
         q = request.args.get("q", "")
         miss = request.args.get("miss") == "1"
-        return render_template("search.html", q=q, miss=miss)
+        err = request.args.get("err") == "1"
+        return render_template("search.html", q=q, miss=miss, err=err)
 
     @app.post("/search")
-    def search_post() -> Response:
+    def search_post() -> str | Response:
+        expired = _session_expired_page()
+        if expired is not None:
+            return expired
         member_id = request.form.get("q1", "").strip()
+        if MEMBER_ID_RE.fullmatch(member_id) is None:
+            # Validation failure: never echo the bad input anywhere.
+            return redirect(url_for("search_get", err="1"))
         if member_id in MEMBERS:
             return redirect(url_for("member_detail", member_id=member_id))
         return redirect(url_for("search_get", q=member_id, miss="1"))
 
     @app.get("/member/<member_id>")
-    def member_detail(member_id: str) -> str | Response:
+    def member_detail(member_id: str) -> str | Response | tuple[str, int]:
+        expired = _session_expired_page()
+        if expired is not None:
+            return expired
+        member = MEMBERS.get(member_id)
+        if FAULTS["permission_denied"] and member is not None:
+            return render_template("denied.html")
+        if FAULTS["app_error"]:
+            return render_template("error.html"), 500
         if FAULTS["slow_load"]:
             time.sleep(SLOW_LOAD_SECONDS)
-        member = MEMBERS.get(member_id)
         if member is None:
             return redirect(url_for("search_get", q=member_id, miss="1"))
         rows = [(label, format_money(balance)) for label, balance in member.accounts]
         return render_template(
             "member.html", member_id=member_id, name=member.name, accounts=rows
         )
+
+    @app.post("/__continue")
+    def continue_session() -> Response:
+        FAULTS["session_expired"] = False
+        target = request.form.get("u1", "")
+        if not _is_safe_relative_path(target):
+            target = url_for("search_get")
+        return redirect(target)
+
+    @app.post("/__dismiss")
+    def dismiss_notice() -> Response:
+        FAULTS["interstitial"] = False
+        return redirect(url_for("search_get"))
 
     @app.get("/reports")
     def reports() -> str:

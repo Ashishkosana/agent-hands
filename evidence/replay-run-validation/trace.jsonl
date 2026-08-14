@@ -1,0 +1,9 @@
+{"ts": "2026-08-14T17:42:40.642+00:00", "event": "run_started", "capability": "lookup_member_balance", "version": 1, "artifact_sha256": "1984dbffeba0a1d34f4d105066eb5c8eb51f7056feff9645152f3bd71200486f", "params": {"member_id": "abc"}}
+{"ts": "2026-08-14T17:42:40.998+00:00", "event": "requires_met"}
+{"ts": "2026-08-14T17:42:40.998+00:00", "event": "step_started", "step": "s1", "intent": "Enter the member ID in the search field", "risk": "safe"}
+{"ts": "2026-08-14T17:42:41.038+00:00", "event": "acted", "step": "s1", "action": "type", "rung": "relative:nearest_input_right of (text='Member ID')", "rung_index": 1, "text": "abc"}
+{"ts": "2026-08-14T17:42:41.043+00:00", "event": "postconditions_met", "step": "s1"}
+{"ts": "2026-08-14T17:42:41.043+00:00", "event": "step_started", "step": "s2", "intent": "Submit the member search", "risk": "safe"}
+{"ts": "2026-08-14T17:42:41.099+00:00", "event": "acted", "step": "s2", "action": "click", "rung": "role=button name='Search'", "rung_index": 0, "text": null}
+{"ts": "2026-08-14T17:42:41.132+00:00", "event": "recognizer_fired", "condition": "validation_rejected", "outcome": "VALIDATION_REJECTED", "matched": "Member ID must be numeric."}
+{"ts": "2026-08-14T17:42:41.153+00:00", "event": "run_finished", "result": {"result": "business_outcome", "code": "VALIDATION_REJECTED", "description": "The application rejected the member ID as invalid input.", "evidence": {"condition_id": "validation_rejected", "region": "input_errors", "role": null, "matched_text": "Member ID must be numeric."}}}

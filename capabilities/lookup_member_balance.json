@@ -29,12 +29,18 @@
       "description": "Member number as printed on statements",
       "sensitive": false,
       "example": "12345",
-      "pattern": "[0-9]{1,10}"
+      "pattern": "[0-9A-Za-z]{1,10}"
     }
   },
   "outcomes": {
     "MEMBER_NOT_FOUND": {
       "description": "No member exists with this ID."
+    },
+    "VALIDATION_REJECTED": {
+      "description": "The application rejected the member ID as invalid input."
+    },
+    "PERMISSION_DENIED": {
+      "description": "The session's role may not view this member."
     }
   },
   "outputs": {
@@ -119,6 +125,24 @@
           "name": "main"
         }
       ]
+    },
+    "input_errors": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "container": "table",
+          "anchor": {
+            "strategy": "text",
+            "text": "Input Errors"
+          }
+        }
+      ],
+      "context": [
+        {
+          "name": "main"
+        }
+      ]
     }
   },
   "steps": [
@@ -163,7 +187,7 @@
         {
           "kind": "value_matches_param",
           "param": "member_id",
-          "normalize": "digits"
+          "normalize": "none"
         }
       ],
       "risk": "safe"
@@ -224,6 +248,159 @@
       },
       "classify": "business_outcome",
       "outcome_code": "MEMBER_NOT_FOUND",
+      "provenance": "authored",
+      "verified_by_eval": false
+    },
+    {
+      "id": "validation_rejected",
+      "armed_after": "s2",
+      "match": {
+        "kind": "region_text",
+        "region": "input_errors",
+        "patterns": [
+          "Member ID must be numeric."
+        ]
+      },
+      "classify": "business_outcome",
+      "outcome_code": "VALIDATION_REJECTED",
+      "provenance": "authored",
+      "verified_by_eval": false
+    },
+    {
+      "id": "permission_denied",
+      "armed_after": "s2",
+      "match": {
+        "kind": "role_name",
+        "role": "heading",
+        "name": "Access Denied",
+        "context": [
+          {
+            "name": "main"
+          }
+        ]
+      },
+      "classify": "business_outcome",
+      "outcome_code": "PERMISSION_DENIED",
+      "provenance": "authored",
+      "verified_by_eval": false
+    },
+    {
+      "id": "session_expired",
+      "armed_after": "s1",
+      "match": {
+        "kind": "role_name",
+        "role": "heading",
+        "name": "Session Expired",
+        "context": [
+          {
+            "name": "main"
+          }
+        ]
+      },
+      "classify": "recoverable",
+      "resume": "retry_current_step",
+      "max_fires_per_run": 2,
+      "recovery": [
+        {
+          "id": "rs1",
+          "intent": "Continue the expired session",
+          "action": {
+            "kind": "click"
+          },
+          "target": {
+            "ladder": [
+              {
+                "strategy": "role",
+                "role": "button",
+                "name": "Continue Session"
+              }
+            ],
+            "context": [
+              {
+                "name": "main"
+              }
+            ]
+          },
+          "pre": [
+            {
+              "kind": "visible"
+            }
+          ],
+          "post": [
+            {
+              "kind": "role_name_absent",
+              "role": "heading",
+              "name": "Session Expired",
+              "context": [
+                {
+                  "name": "main"
+                }
+              ]
+            }
+          ],
+          "risk": "safe"
+        }
+      ],
+      "provenance": "authored",
+      "verified_by_eval": false
+    },
+    {
+      "id": "maintenance_interstitial",
+      "armed_after": "s1",
+      "match": {
+        "kind": "role_name",
+        "role": "heading",
+        "name": "Notice",
+        "context": [
+          {
+            "name": "main"
+          }
+        ]
+      },
+      "classify": "recoverable",
+      "resume": "retry_current_step",
+      "max_fires_per_run": 2,
+      "recovery": [
+        {
+          "id": "rd1",
+          "intent": "Dismiss the maintenance notice",
+          "action": {
+            "kind": "click"
+          },
+          "target": {
+            "ladder": [
+              {
+                "strategy": "role",
+                "role": "button",
+                "name": "Dismiss"
+              }
+            ],
+            "context": [
+              {
+                "name": "main"
+              }
+            ]
+          },
+          "pre": [
+            {
+              "kind": "visible"
+            }
+          ],
+          "post": [
+            {
+              "kind": "role_name_absent",
+              "role": "heading",
+              "name": "Notice",
+              "context": [
+                {
+                  "name": "main"
+                }
+              ]
+            }
+          ],
+          "risk": "safe"
+        }
+      ],
       "provenance": "authored",
       "verified_by_eval": false
     }

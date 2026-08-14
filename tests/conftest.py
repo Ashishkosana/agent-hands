@@ -50,6 +50,33 @@ def fixture_app() -> Iterator[str]:
     proc.wait(timeout=10)
 
 
+def set_fault(base_url: str, name: str, enabled: bool) -> None:
+    """Toggle a fixture fault via its /__faults API."""
+    import json as _json
+
+    body = _json.dumps({"fault": name, "enabled": enabled}).encode()
+    request = urllib.request.Request(
+        base_url + "/__faults", data=body, headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(request, timeout=5) as response:
+        response.read()
+
+
+@pytest.fixture(autouse=True)
+def _reset_faults(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Any test that used the fixture app leaves all faults off."""
+    yield
+    if "fixture_app" in request.fixturenames:
+        base = request.getfixturevalue("fixture_app")
+        with urllib.request.urlopen(base + "/__faults", timeout=5) as response:
+            import json as _json
+
+            state = _json.loads(response.read())
+        for name, enabled in state.items():
+            if enabled:
+                set_fault(base, name, False)
+
+
 @pytest.fixture()
 def capability(fixture_app: str) -> Capability:
     """The repo's lookup capability, pointed at the test server's port."""

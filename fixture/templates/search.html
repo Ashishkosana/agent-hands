@@ -24,6 +24,17 @@
 <td><font size="2">Tip: if no member matches, verify the ID.</font></td>
 </tr>
 </table>
+{% if err %}
+<br>
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#808080" bgcolor="#F0F0F0">
+<tr>
+<td bgcolor="#D4D0C8"><b>Input Errors</b></td>
+</tr>
+<tr>
+<td>Member ID must be numeric.</td>
+</tr>
+</table>
+{% endif %}
 {% if miss %}
 <br>
 <table border="1" cellpadding="4" cellspacing="0" bordercolor="#808080" bgcolor="#F0F0F0">

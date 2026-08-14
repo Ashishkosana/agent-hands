@@ -32,6 +32,8 @@ states, each classified correctly; 10/10 replay stability; discovery cost
 ~3.5k tokens once vs **0 tokens** per replay. Evidence of real runs (including
 the genuine LLM-driven discovery) is in [/evidence/](evidence/README.md).
 
+![The Fairview Teller Console fixture](docs/fixture-screenshot.png)
+
 ## Setup
 
 Requires Python ≥ 3.12.

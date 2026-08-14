@@ -19,6 +19,7 @@ action is the one failure this engine must make structurally impossible.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import time
 from dataclasses import dataclass
@@ -30,6 +31,8 @@ from hands.artifact import (
     Condition,
     Step,
     TypeAction,
+    ValueMatchesParam,
+    dump_capability,
 )
 from hands.conditions import (
     check_recognizers,
@@ -95,6 +98,11 @@ class ReplayEngine:
                 "run_started",
                 capability=capability.name,
                 version=capability.version,
+                # The hash of the exact artifact that ran: every trace line is
+                # attributable to one reviewable contract.
+                artifact_sha256=hashlib.sha256(
+                    dump_capability(capability).encode()
+                ).hexdigest(),
                 params=_masked_params(capability, params),
             )
             try:
@@ -127,13 +135,14 @@ class ReplayEngine:
             return unmet
 
         step_order = {step.id: i for i, step in enumerate(capability.steps)}
+        suppressed: set[str] = set()
         for index, step in enumerate(capability.steps):
             armed = [
                 c for c in capability.conditions if step_order[c.armed_after] <= index
             ]
-            self._run_step(capability, params, surface, trace, step, armed)
+            suppressed = self._run_step(capability, params, surface, trace, step, armed)
 
-        self._verify_checkpoint(capability, params, surface, trace)
+        self._verify_checkpoint(capability, params, surface, trace, suppressed)
         outputs = self._extract_outputs(capability, surface, trace)
         return Success(outputs=outputs)
 
@@ -167,12 +176,14 @@ class ReplayEngine:
         trace: Trace,
         step: Step,
         armed: list[Condition],
-    ) -> None:
+    ) -> set[str]:
         trace.emit("step_started", step=step.id, intent=step.intent, risk=step.risk)
         deadline = time.monotonic() + self.config.step_budget_s
 
         # Freshness snapshot: recognizers already matching BEFORE this step's
         # action are stale state and may not classify this step's result.
+        # Suppression lifts once the stale state is observed GONE — a fresh
+        # match of the same recognizer afterwards is a real, new signal.
         suppressed = matching_now(surface, capability, armed)
         if suppressed:
             trace.emit("recognizers_suppressed_stale", step=step.id, ids=sorted(suppressed))
@@ -183,6 +194,7 @@ class ReplayEngine:
         self._await_post(
             capability, params, surface, trace, step, armed, suppressed, resolved, deadline
         )
+        return suppressed
 
     def _act_with_retries(
         self,
@@ -197,6 +209,7 @@ class ReplayEngine:
     ) -> ResolvedTarget | None:
         attempts = 0
         while True:
+            self._refresh_suppression(capability, surface, trace, armed, suppressed)
             self._poll_recognizers(capability, surface, trace, armed, suppressed)
             try:
                 resolved = self._resolve_and_check_pre(surface, step)
@@ -225,6 +238,12 @@ class ReplayEngine:
                     will_retry=retryable,
                 )
                 if retryable:
+                    # Probe for the action's effect before re-acting: if this
+                    # step's (state) postconditions already hold, the action
+                    # landed and re-acting would double-fire it.
+                    if self._effect_already_present(capability, params, surface, step):
+                        trace.emit("action_effect_detected", step=step.id, attempt=attempts)
+                        return None
                     time.sleep(self.config.poll_interval_s)
                     continue
                 raise _StepFailed(
@@ -289,6 +308,7 @@ class ReplayEngine:
             ):
                 trace.emit("postconditions_met", step=step.id)
                 return
+            self._refresh_suppression(capability, surface, trace, armed, suppressed)
             self._poll_recognizers(capability, surface, trace, armed, suppressed)
             if time.monotonic() >= deadline:
                 expected = " AND ".join(describe_state(c) for c in step.post)
@@ -327,12 +347,53 @@ class ReplayEngine:
             )
         )
 
+    def _refresh_suppression(
+        self,
+        capability: Capability,
+        surface: WebSurface,
+        trace: Trace,
+        armed: list[Condition],
+        suppressed: set[str],
+    ) -> None:
+        """Lift suppression for stale recognizers whose state has disappeared.
+
+        The freshness rule has two halves: a match present before the action
+        may not classify it (the snapshot), and once that stale state is seen
+        GONE, the recognizer is live again — otherwise a genuine new match of
+        the same condition within this step would be invisible.
+        """
+        if not suppressed:
+            return
+        still = matching_now(
+            surface, capability, [c for c in armed if c.id in suppressed]
+        )
+        lifted = suppressed - still
+        if lifted:
+            trace.emit("recognizer_suppression_lifted", ids=sorted(lifted))
+            suppressed.intersection_update(still)
+
+    def _effect_already_present(
+        self,
+        capability: Capability,
+        params: dict[str, str],
+        surface: WebSurface,
+        step: Step,
+    ) -> bool:
+        if not step.post:
+            return False
+        if any(isinstance(c, ValueMatchesParam) for c in step.post):
+            # Value postconditions need the resolved target, which the failed
+            # attempt may not have produced; don't guess.
+            return False
+        return all(post_holds(surface, c, capability, params, None) for c in step.post)
+
     def _verify_checkpoint(
         self,
         capability: Capability,
         params: dict[str, str],
         surface: WebSurface,
         trace: Trace,
+        suppressed: set[str],
     ) -> None:
         deadline = time.monotonic() + self.config.step_budget_s
         armed = list(capability.conditions)
@@ -345,7 +406,8 @@ class ReplayEngine:
             if not pending:
                 trace.emit("checkpoint_verified")
                 return
-            self._poll_recognizers(capability, surface, trace, armed, set())
+            self._refresh_suppression(capability, surface, trace, armed, suppressed)
+            self._poll_recognizers(capability, surface, trace, armed, suppressed)
             if time.monotonic() >= deadline:
                 expected = " AND ".join(describe_state(c) for c in pending)
                 raise _StepFailed(
@@ -385,12 +447,17 @@ class ReplayEngine:
                 try:
                     value = parse_money(raw)
                 except ValueError_ as exc:
+                    observed = (
+                        f"unparseable value («masked», {len(raw)} chars)"
+                        if spec.sensitive
+                        else f"raw text {raw!r}"
+                    )
                     raise _StepFailed(
                         FailureReport(
                             step_id=None,
                             intent=f"extract output {name!r}",
                             expected="a parseable money value",
-                            observed=f"raw text {raw!r}",
+                            observed=observed,
                         )
                     ) from exc
             else:

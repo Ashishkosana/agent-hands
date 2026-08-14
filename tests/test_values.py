@@ -4,7 +4,15 @@ from decimal import Decimal
 
 import pytest
 
-from hands.values import ValueError_, normalize, parse_money, placeholders_in, resolve_text
+from hands.values import (
+    ValueError_,
+    normalize,
+    param_value_matches,
+    parse_money,
+    placeholders_in,
+    resolve_text,
+    value_bound_in,
+)
 
 
 @pytest.mark.parametrize(
@@ -27,6 +35,40 @@ def test_parse_money(text: str, expected: Decimal) -> None:
 def test_parse_money_rejects_junk(text: str) -> None:
     with pytest.raises(ValueError_):
         parse_money(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "1.234,50",  # comma-decimal locale: must FAIL, not parse 100x wrong
+        "12 345,67",
+        "NaN",  # Decimal() would accept these; money must not
+        "Infinity",
+        "sNaN",
+        "1_000",
+        "1,23.45",  # malformed grouping
+        "12,34",
+    ],
+)
+def test_parse_money_rejects_rather_than_misparses(text: str) -> None:
+    with pytest.raises(ValueError_):
+        parse_money(text)
+
+
+def test_value_bound_in_requires_boundaries() -> None:
+    # Identity binding: "123" must not pass against member 12345's page.
+    assert not value_bound_in("123", "Member # 12345")
+    assert value_bound_in("12345", "Member # 12345")
+    assert value_bound_in("12345", "ID:12345.")
+    assert not value_bound_in("", "anything")
+
+
+def test_param_value_matches_never_vacuous() -> None:
+    # A digitless expected value normalizes to "" and can never match — an
+    # empty field must not satisfy a value postcondition vacuously.
+    assert not param_value_matches("abc", "", "digits")
+    assert param_value_matches("12-345", "12345", "digits")
+    assert not param_value_matches("1000", "junk", "money")
 
 
 def test_normalize_digits() -> None:

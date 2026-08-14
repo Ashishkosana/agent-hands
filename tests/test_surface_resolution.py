@@ -118,6 +118,19 @@ def test_nearest_input_right_finds_unlabeled_input(surface: WebSurface) -> None:
     assert resolved.locator.get_attribute("name") == "q1"
 
 
+def test_geometric_tie_is_ambiguity_not_dom_order(surface: WebSurface) -> None:
+    # A rowspan anchor sees one equally-near cell per spanned row. Picking the
+    # DOM-order winner would smuggle a guess past the exactly-one rule.
+    surface.page.set_content(
+        "<table><tr><td rowspan='2'>Savings</td><td>$1.00</td></tr>"
+        "<tr><td>$2.00</td></tr></table>"
+    )
+    with pytest.raises(TargetAmbiguous):
+        surface.resolve(
+            ladder(RelativeRung(relation="cell_right", anchor=TextRung(text="Savings")))
+        )
+
+
 def test_ambiguous_anchor_refuses(surface: WebSurface) -> None:
     surface.page.set_content(
         "<table><tr><td>Savings</td><td>$1.00</td></tr>"

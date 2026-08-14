@@ -82,6 +82,7 @@ def test_trace_records_rung_telemetry_and_masks_sensitive_outputs(
     ]
     kinds = [e["event"] for e in events]
     assert kinds[0] == "run_started" and kinds[-1] == "run_finished"
+    assert len(events[0]["artifact_sha256"]) == 64  # run attributable to contract
 
     # Rung telemetry: the unlabeled legacy input resolves on the proximity
     # rung (index 1), not the label rung — recorded, not asserted away.

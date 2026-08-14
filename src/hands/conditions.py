@@ -32,7 +32,7 @@ from hands.surface import (
     SurfaceError,
     WebSurface,
 )
-from hands.values import normalize
+from hands.values import param_value_matches, value_bound_in
 
 
 @dataclass
@@ -72,9 +72,11 @@ def state_holds(
         if isinstance(cond, UrlMatches):
             frame = surface.frame_for(cond.context)
             return re.search(cond.pattern, frame.url) is not None
-        # RegionTextMatchesParam — the identity binding check.
+        # RegionTextMatchesParam — the identity binding check. Boundary-
+        # anchored, never bare containment: member "123" must not pass
+        # against a page showing member "12345".
         text = _region_text(surface, capability, cond.region)
-        return text is not None and params[cond.param] in text
+        return text is not None and value_bound_in(params[cond.param], text)
     except (PlaywrightError, SurfaceError):
         return False
 
@@ -93,7 +95,7 @@ def post_holds(
             observed = target.locator.input_value(timeout=500)
         except (PlaywrightError, SurfaceError):
             return False
-        return normalize(observed, cond.normalize) == normalize(params[cond.param], cond.normalize)
+        return param_value_matches(params[cond.param], observed, cond.normalize)
     return state_holds(surface, cond, capability, params)
 
 

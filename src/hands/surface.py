@@ -252,7 +252,7 @@ class WebSurface:
         else:  # nearest_input_right
             candidates = _visible(base.locator("input, select, textarea"))
 
-        best: tuple[float, Locator] | None = None
+        scored: list[tuple[float, Locator]] = []
         for candidate in candidates:
             box = _box_of(candidate)
             if box is None:
@@ -265,10 +265,15 @@ class WebSurface:
             to_the_right = box.x >= anchor_box.right - 1.0
             if not (same_row and to_the_right):
                 continue
-            distance = box.x - anchor_box.right
-            if best is None or distance < best[0]:
-                best = (distance, candidate)
-        return [best[1]] if best is not None else []
+            scored.append((box.x - anchor_box.right, candidate))
+        if not scored:
+            return []
+        # A geometric tie is ambiguity. Returning the DOM-order winner would
+        # smuggle a guess past the exactly-one rule (a rowspan anchor sees one
+        # equally-near cell per spanned row); return ALL tied candidates and
+        # let resolve() refuse.
+        best = min(distance for distance, _ in scored)
+        return [candidate for distance, candidate in scored if distance - best <= 0.75]
 
     def _verify_fingerprint(
         self, frame: Frame, resolved: ResolvedTarget, fingerprint: Fingerprint

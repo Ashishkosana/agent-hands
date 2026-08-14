@@ -66,6 +66,17 @@ def test_base_is_valid() -> None:
     build()
 
 
+def test_design_doc_example_loads() -> None:
+    """The design doc's canonical artifact example must validate against the
+    real schema — the reviewable contract and the loader cannot drift apart."""
+    design = (ARTIFACT_PATH.parent.parent / "docs" / "DESIGN.md").read_text()
+    import re as _re
+
+    block = _re.search(r"```json\n(.*?)```", design, _re.DOTALL)
+    assert block is not None, "DESIGN.md has no json example"
+    Capability.model_validate_json(block.group(1))
+
+
 def test_repo_artifact_loads_and_round_trips() -> None:
     original = json.loads(ARTIFACT_PATH.read_text())
     cap = Capability.model_validate(original)

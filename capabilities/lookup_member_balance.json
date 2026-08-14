@@ -5,11 +5,23 @@
   "description": "Look up a member by ID in the Fairview Teller Console and read their current savings balance.",
   "target": {
     "app": "fairview-teller",
-    "entry": { "web": { "url": "http://127.0.0.1:8000/" } }
+    "entry": {
+      "web": {
+        "url": "http://127.0.0.1:8000/"
+      }
+    }
   },
   "requires": [
-    { "kind": "role_name_visible", "role": "heading", "name": "Fairview Teller Console",
-      "context": [ { "name": "main" } ] }
+    {
+      "kind": "role_name_visible",
+      "role": "heading",
+      "name": "Fairview Teller Console",
+      "context": [
+        {
+          "name": "main"
+        }
+      ]
+    }
   ],
   "parameters": {
     "member_id": {
@@ -21,7 +33,9 @@
     }
   },
   "outcomes": {
-    "MEMBER_NOT_FOUND": { "description": "No member exists with this ID." }
+    "MEMBER_NOT_FOUND": {
+      "description": "No member exists with this ID."
+    }
   },
   "outputs": {
     "savings_balance": {
@@ -29,63 +43,170 @@
       "sensitive": true,
       "from": {
         "ladder": [
-          { "strategy": "relative", "relation": "cell_right",
-            "anchor": { "strategy": "text", "text": "Savings" } }
+          {
+            "strategy": "relative",
+            "relation": "cell_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Savings"
+            }
+          }
         ],
-        "context": [ { "name": "main" } ]
+        "context": [
+          {
+            "name": "main"
+          }
+        ]
       },
-      "parse": { "kind": "money", "locale": "en_US" }
+      "parse": {
+        "kind": "money",
+        "locale": "en_US"
+      },
+      "region": "accounts"
     }
   },
   "regions": {
     "results": {
       "ladder": [
-        { "strategy": "relative", "relation": "container_of", "container": "table",
-          "anchor": { "strategy": "text", "text": "Search Results" } }
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "container": "table",
+          "anchor": {
+            "strategy": "text",
+            "text": "Search Results"
+          }
+        }
       ],
-      "context": [ { "name": "main" } ]
+      "context": [
+        {
+          "name": "main"
+        }
+      ]
     },
     "member_header": {
       "ladder": [
-        { "strategy": "relative", "relation": "container_of", "container": "table",
-          "anchor": { "strategy": "text", "text": "Member #" } }
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "container": "table",
+          "anchor": {
+            "strategy": "text",
+            "text": "Member #"
+          }
+        }
       ],
-      "context": [ { "name": "main" } ]
+      "context": [
+        {
+          "name": "main"
+        }
+      ]
+    },
+    "accounts": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "container": "table",
+          "anchor": {
+            "strategy": "text",
+            "text": "Account"
+          }
+        }
+      ],
+      "context": [
+        {
+          "name": "main"
+        }
+      ]
     }
   },
   "steps": [
     {
       "id": "s1",
       "intent": "Enter the member ID in the search field",
-      "action": { "kind": "type", "text": "{param:member_id}" },
+      "action": {
+        "kind": "type",
+        "text": "{param:member_id}"
+      },
       "target": {
         "ladder": [
-          { "strategy": "label", "text": "Member ID" },
-          { "strategy": "relative", "relation": "nearest_input_right",
-            "anchor": { "strategy": "text", "text": "Member ID" } }
+          {
+            "strategy": "label",
+            "text": "Member ID"
+          },
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Member ID"
+            }
+          }
         ],
-        "context": [ { "name": "main" } ],
-        "fingerprint": { "role": "textbox", "editable": true }
+        "context": [
+          {
+            "name": "main"
+          }
+        ],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        }
       },
-      "pre": [ { "kind": "editable" } ],
-      "post": [ { "kind": "value_matches_param", "param": "member_id", "normalize": "digits" } ],
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "member_id",
+          "normalize": "digits"
+        }
+      ],
       "risk": "safe"
     },
     {
       "id": "s2",
       "intent": "Submit the member search",
-      "action": { "kind": "click" },
+      "action": {
+        "kind": "click"
+      },
       "target": {
         "ladder": [
-          { "strategy": "role", "role": "button", "name": "Search" }
+          {
+            "strategy": "role",
+            "role": "button",
+            "name": "Search"
+          }
         ],
-        "context": [ { "name": "main" } ],
-        "fingerprint": { "role": "button" }
+        "context": [
+          {
+            "name": "main"
+          }
+        ],
+        "fingerprint": {
+          "role": "button"
+        }
       },
-      "pre": [ { "kind": "visible" } ],
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
       "post": [
-        { "kind": "role_name_visible", "role": "heading", "name": "Member Details",
-          "context": [ { "name": "main" } ] }
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Member Details",
+          "context": [
+            {
+              "name": "main"
+            }
+          ]
+        }
       ],
       "risk": "safe"
     }
@@ -97,7 +218,9 @@
       "match": {
         "kind": "region_text",
         "region": "results",
-        "patterns": [ "No member matches" ]
+        "patterns": [
+          "No member matches"
+        ]
       },
       "classify": "business_outcome",
       "outcome_code": "MEMBER_NOT_FOUND",
@@ -107,11 +230,26 @@
   ],
   "checkpoint": {
     "all": [
-      { "kind": "role_name_visible", "role": "heading", "name": "Member Details",
-        "context": [ { "name": "main" } ] },
-      { "kind": "region_text_matches_param", "region": "member_header", "param": "member_id" }
+      {
+        "kind": "role_name_visible",
+        "role": "heading",
+        "name": "Member Details",
+        "context": [
+          {
+            "name": "main"
+          }
+        ]
+      },
+      {
+        "kind": "region_text_matches_param",
+        "region": "member_header",
+        "param": "member_id"
+      }
     ]
   },
   "allow_unbound_checkpoint": false,
-  "risk_review": { "reviewed_by": null, "artifact_hash": null }
+  "risk_review": {
+    "reviewed_by": null,
+    "artifact_hash": null
+  }
 }

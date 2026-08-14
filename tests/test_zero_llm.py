@@ -48,3 +48,18 @@ def test_replay_is_hermetic(capability: Capability, tmp_path: Path) -> None:
     result = json.loads(proc.stdout)
     assert result["result"] == "success"
     assert result["outputs"]["savings_balance"] == "1234.50"
+
+    # Zero model events in the trace: every event kind is a known engine event.
+    engine_events = {
+        "run_started", "requires_met", "requires_unmet", "step_started",
+        "recognizers_suppressed_stale", "recognizer_suppression_lifted",
+        "acted", "act_attempt_failed", "action_effect_detected",
+        "postconditions_met", "recognizer_fired", "checkpoint_verified",
+        "output_extracted", "run_finished",
+    }
+    (run_dir,) = (tmp_path / "runs").iterdir()
+    events = {
+        json.loads(line)["event"]
+        for line in (run_dir / "trace.jsonl").read_text().splitlines()
+    }
+    assert events <= engine_events, f"unexpected events: {events - engine_events}"

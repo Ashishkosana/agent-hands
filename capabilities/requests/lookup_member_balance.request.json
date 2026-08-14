@@ -3,7 +3,11 @@
   "description": "Look up a member by ID in the Fairview Teller Console and read their current savings balance.",
   "target": {
     "app": "fairview-teller",
-    "entry": { "web": { "url": "http://127.0.0.1:8000/" } }
+    "entry": {
+      "web": {
+        "url": "http://127.0.0.1:8000/"
+      }
+    }
   },
   "goal_template": "Look up the member whose ID is {param:member_id} and read their current savings balance.",
   "parameters": {
@@ -15,15 +19,23 @@
       "pattern": "[0-9]{1,10}"
     }
   },
-  "example_params": { "member_id": "12345" },
+  "example_params": {
+    "member_id": "12345"
+  },
   "identity_param": "member_id",
   "outputs": {
-    "savings_balance": { "type": "decimal", "sensitive": true }
+    "savings_balance": {
+      "type": "decimal",
+      "sensitive": true,
+      "example_value": "$1,234.50"
+    }
   },
   "outcomes": {
     "MEMBER_NOT_FOUND": {
       "description": "No member exists with this ID.",
-      "params": { "member_id": "99999" },
+      "params": {
+        "member_id": "99999"
+      },
       "identity_param": "member_id"
     }
   }

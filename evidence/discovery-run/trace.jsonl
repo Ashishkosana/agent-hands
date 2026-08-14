@@ -1,8 +1,8 @@
-{"ts": "2026-08-14T06:51:07.593+00:00", "event": "discovery_started", "capability": "lookup_member_balance", "leg": "happy"}
-{"ts": "2026-08-14T06:51:10.151+00:00", "event": "llm_call", "prompt_tokens": 810, "completion_tokens": 114}
-{"ts": "2026-08-14T06:51:10.229+00:00", "event": "planner_acted", "step": "s1", "kind": "type", "intent": "Enter member ID", "risk": "safe", "ladder": ["relative", "css"], "notes": []}
-{"ts": "2026-08-14T06:51:10.620+00:00", "event": "llm_call", "prompt_tokens": 1083, "completion_tokens": 34}
-{"ts": "2026-08-14T06:51:10.715+00:00", "event": "planner_acted", "step": "s2", "kind": "click", "intent": "Search for member", "risk": "risky", "ladder": ["role", "text", "css"], "notes": []}
-{"ts": "2026-08-14T06:51:11.465+00:00", "event": "llm_call", "prompt_tokens": 1275, "completion_tokens": 146}
-{"ts": "2026-08-14T06:51:11.466+00:00", "event": "planner_done", "summary": "Retrieved the savings balance for member 12345."}
-{"ts": "2026-08-14T06:51:11.508+00:00", "event": "discovery_distilled", "steps": 2, "outputs": ["savings_balance"]}
+{"ts": "2026-08-14T17:22:48.670+00:00", "event": "discovery_started", "capability": "lookup_member_balance", "leg": "happy"}
+{"ts": "2026-08-14T17:22:50.723+00:00", "event": "llm_call", "prompt_tokens": 861, "completion_tokens": 96}
+{"ts": "2026-08-14T17:22:50.850+00:00", "event": "planner_acted", "step": "s1", "kind": "type", "intent": "Enter member ID", "risk": "safe", "ladder": ["relative", "css"], "post": ["value_matches_param"], "notes": []}
+{"ts": "2026-08-14T17:22:51.370+00:00", "event": "llm_call", "prompt_tokens": 1139, "completion_tokens": 33}
+{"ts": "2026-08-14T17:22:51.508+00:00", "event": "planner_acted", "step": "s2", "kind": "click", "intent": "Click search", "risk": "risky", "ladder": ["role", "text", "css"], "post": ["role_name_visible"], "notes": []}
+{"ts": "2026-08-14T17:22:51.997+00:00", "event": "llm_call", "prompt_tokens": 1353, "completion_tokens": 147}
+{"ts": "2026-08-14T17:22:51.997+00:00", "event": "planner_done", "summary": "Retrieved the savings balance for the member."}
+{"ts": "2026-08-14T17:22:52.045+00:00", "event": "discovery_distilled", "steps": 2, "outputs": ["savings_balance"]}

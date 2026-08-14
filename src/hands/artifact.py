@@ -124,6 +124,10 @@ class TargetLadder(_Model):
     ladder: list[Rung] = Field(min_length=1)
     context: list[ContextSegment] = Field(default_factory=list)
     fingerprint: Fingerprint | None = None
+    # True when only a CSS path survived round-trip verification at record
+    # time: the fragility is part of the reviewable contract, not a buried
+    # trace note. Replay emits a warning whenever a fragile target is used.
+    fragile: bool = False
 
 
 class WebEntry(_Model):
@@ -404,6 +408,22 @@ class Capability(_Model):
                     raise ValueError(f"checkpoint/requires: unknown region {state.region!r}")
                 if state.param not in known_params:
                     raise ValueError(f"checkpoint/requires: undeclared parameter {state.param!r}")
+
+        # Every declared parameter must be USED — by a typed placeholder, a
+        # value postcondition, or an identity binding. An unused parameter is
+        # a contract lying about its inputs.
+        used: set[str] = set()
+        for step in self.steps:
+            if step.action.kind == "type":
+                used.update(placeholders_in(step.action.text))
+            for post in step.post:
+                if isinstance(post, ValueMatchesParam):
+                    used.add(post.param)
+        for state in checkpoint_conditions:
+            if isinstance(state, RegionTextMatchesParam):
+                used.add(state.param)
+        if unused := known_params - used:
+            raise ValueError(f"declared parameters are never used: {sorted(unused)}")
 
         # Checkpoint identity binding: a capability with identifying parameters
         # must prove it reached the record it was asked about, or explicitly

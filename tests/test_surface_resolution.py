@@ -152,6 +152,18 @@ def test_fingerprint_mismatch_fails_hard(surface: WebSurface) -> None:
         surface.resolve(target)
 
 
+def test_password_values_never_enter_observations(surface: WebSurface) -> None:
+    from hands.observe import build_observation
+
+    surface.page.set_content(
+        "<table><tr><td>PIN</td><td><input type='password' value='hunter2'></td></tr></table>"
+    )
+    observation = build_observation(surface)
+    rendered = observation.render()
+    assert "hunter2" not in rendered
+    assert "«masked»" in rendered
+
+
 def test_label_rung_is_real_association_only(surface: WebSurface) -> None:
     # A td text label is NOT a label association; the ladder must fall through
     # to the proximity rung — this is the legacy-markup reality the design

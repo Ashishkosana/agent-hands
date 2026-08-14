@@ -63,7 +63,8 @@
             "ordinal": null
           }
         ],
-        "fingerprint": null
+        "fingerprint": null,
+        "fragile": false
       },
       "parse": {
         "kind": "money",
@@ -91,7 +92,8 @@
           "ordinal": null
         }
       ],
-      "fingerprint": null
+      "fingerprint": null,
+      "fragile": false
     },
     "output_savings_balance": {
       "ladder": [
@@ -112,7 +114,8 @@
           "ordinal": null
         }
       ],
-      "fingerprint": null
+      "fingerprint": null,
+      "fragile": false
     },
     "outcome_member_not_found": {
       "ladder": [
@@ -133,7 +136,8 @@
           "ordinal": null
         }
       ],
-      "fingerprint": null
+      "fingerprint": null,
+      "fragile": false
     }
   },
   "steps": [
@@ -170,7 +174,8 @@
         "fingerprint": {
           "role": "textbox",
           "editable": true
-        }
+        },
+        "fragile": false
       },
       "pre": [
         {
@@ -188,7 +193,7 @@
     },
     {
       "id": "s2",
-      "intent": "Search for member",
+      "intent": "Click search",
       "action": {
         "kind": "click"
       },
@@ -218,7 +223,8 @@
         "fingerprint": {
           "role": "button",
           "editable": null
-        }
+        },
+        "fragile": false
       },
       "pre": [
         {

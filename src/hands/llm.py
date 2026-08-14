@@ -47,7 +47,7 @@ class LlmTurn:
 
 @dataclass
 class LlmClient:
-    api_key: str
+    api_key: str = field(repr=False)
     model: str = DEFAULT_MODEL
     base_url: str = DEFAULT_BASE_URL
     max_retries: int = 3
@@ -67,17 +67,18 @@ class LlmClient:
                     messages=messages,
                     tools=tools,
                     tool_choice="required",
+                    parallel_tool_calls=False,  # one action per turn is the loop's contract
                     temperature=0.0,
                 )
             except APIStatusError as exc:
                 last_error = exc
                 if exc.status_code in (429, 500, 502, 503):
-                    time.sleep(2.0 * (attempt + 1))
+                    self._backoff(attempt)
                     continue
                 raise LlmError(f"provider error {exc.status_code}: {exc.message}") from exc
             except APIError as exc:
                 last_error = exc
-                time.sleep(2.0 * (attempt + 1))
+                self._backoff(attempt)
                 continue
             choice = response.choices[0]
             calls: list[ToolCall] = []
@@ -106,6 +107,10 @@ class LlmClient:
                 completion_tokens=usage.completion_tokens if usage else 0,
             )
         raise LlmError(f"provider unavailable after {self.max_retries} attempts: {last_error}")
+
+    def _backoff(self, attempt: int) -> None:
+        if attempt < self.max_retries - 1:  # no pointless sleep after the final attempt
+            time.sleep(2.0 * (attempt + 1))
 
 
 def load_dotenv(path: Path) -> None:

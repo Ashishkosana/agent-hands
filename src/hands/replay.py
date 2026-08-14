@@ -178,6 +178,8 @@ class ReplayEngine:
         armed: list[Condition],
     ) -> set[str]:
         trace.emit("step_started", step=step.id, intent=step.intent, risk=step.risk)
+        if step.target is not None and step.target.fragile:
+            trace.emit("fragile_target_warning", step=step.id)
         deadline = time.monotonic() + self.config.step_budget_s
 
         # Freshness snapshot: recognizers already matching BEFORE this step's

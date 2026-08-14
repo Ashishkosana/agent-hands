@@ -65,6 +65,51 @@ class ScriptedModel:
                 )
             if misbehavior == "bad_ref":
                 return self._turn("act", {"kind": "click", "ref": "e999", "intent": "click ghost"})
+            if misbehavior == "bad_json":
+                self._counter += 1
+                call_id = f"call_{self._counter}"
+                return LlmTurn(
+                    assistant_message={
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": call_id,
+                                "type": "function",
+                                "function": {"name": "act", "arguments": '{"kind": "cli'},
+                            }
+                        ],
+                    },
+                    tool_calls=[
+                        ToolCall(
+                            id=call_id, name="act", arguments={}, parse_error="truncated JSON"
+                        )
+                    ],
+                    prompt_tokens=42,
+                    completion_tokens=7,
+                )
+            if misbehavior == "two_calls":
+                first = self._turn("act", {"kind": "click", "ref": "e1", "intent": "a"})
+                second = self._turn("act", {"kind": "click", "ref": "e2", "intent": "b"})
+                calls = first.tool_calls + second.tool_calls
+                return LlmTurn(
+                    assistant_message={
+                        "role": "assistant",
+                        "tool_calls": (
+                            first.assistant_message["tool_calls"]
+                            + second.assistant_message["tool_calls"]
+                        ),
+                    },
+                    tool_calls=calls,
+                    prompt_tokens=42,
+                    completion_tokens=7,
+                )
+            if misbehavior == "literal_value":
+                box = _TEXTBOX_RE.search(self._latest_observation(messages))
+                ref = box.group(1) if box else "e1"
+                return self._turn(
+                    "act",
+                    {"kind": "type", "ref": ref, "text": "12345", "intent": "type literal"},
+                )
 
         goal = str(messages[1].get("content", ""))
         outcome_mode = "expected to produce the business outcome" in goal
@@ -176,12 +221,32 @@ def test_discovery_produces_an_artifact_replay_can_execute(
     assert missing.code == "MEMBER_NOT_FOUND"
 
 
+def _assert_tool_protocol(transcript_path: Path) -> None:
+    """Every assistant message carrying tool_calls must be immediately
+    followed by tool messages answering every id — the rule OpenAI-compatible
+    providers enforce with a 400. The corrective paths must never violate it."""
+    messages = json.loads(transcript_path.read_text())
+    for i, message in enumerate(messages):
+        calls = message.get("tool_calls") if message.get("role") == "assistant" else None
+        if not calls:
+            continue
+        expected_ids = {c["id"] for c in calls}
+        j = i + 1
+        while j < len(messages) and messages[j].get("role") == "tool":
+            expected_ids.discard(messages[j].get("tool_call_id"))
+            j += 1
+        assert not expected_ids, f"unanswered tool_call ids at message {i}: {expected_ids}"
+
+
 def test_planner_corrects_model_misbehavior(
     request_for: DiscoveryRequest, tmp_path: Path
 ) -> None:
-    """A reply with no tool call and an act on a ghost ref are both rejected
-    with corrective feedback — and discovery still completes."""
-    model = ScriptedModel(prelude=["no_tool_call", "bad_ref"])
+    """No-tool-call replies, ghost refs, malformed JSON arguments, parallel
+    tool calls, and literal parameter values are all rejected with corrective
+    feedback ON THE RIGHT CHANNEL — and discovery still completes."""
+    model = ScriptedModel(
+        prelude=["no_tool_call", "bad_ref", "bad_json", "two_calls", "literal_value"]
+    )
     report = discover(
         request_for,
         model,
@@ -189,5 +254,25 @@ def test_planner_corrects_model_misbehavior(
         out_dir=tmp_path / "generated",
     )
     assert report.happy.ending == "done"
-    assert report.happy.invalid_proposals == 2
-    assert model.corrections_seen >= 2
+    assert report.happy.invalid_proposals == 5
+
+    # The transcript must be protocol-clean despite all the misbehavior:
+    # a protocol violation here would have 400'd a real provider mid-run.
+    happy_dir = next(d for d in (tmp_path / "runs").iterdir() if "member_not_found" not in d.name)
+    _assert_tool_protocol(happy_dir / "transcript.json")
+
+
+def test_generated_artifact_marks_search_submit_risky(
+    request_for: DiscoveryRequest, tmp_path: Path
+) -> None:
+    """The extended risk window must catch the form POST that fires while the
+    page reacts — mutating-by-default is a property, not a race."""
+    report = discover(
+        request_for,
+        ScriptedModel(),
+        runs_dir=tmp_path / "runs",
+        out_dir=tmp_path / "generated",
+    )
+    assert report.artifact_path is not None
+    capability = load_capability(report.artifact_path)
+    assert capability.steps[-1].risk == "risky"

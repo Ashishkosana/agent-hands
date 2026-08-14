@@ -110,10 +110,14 @@ def build_ladder(surface: WebSurface, node: ActionableNode) -> tuple[TargetLadde
             f"no locator rung round-trips to the acted element (role={node.role}, "
             f"name={node.name!r}, nearby={node.nearby_text!r})"
         )
-    if all(isinstance(r, CssRung) for r in verified):
+    fragile = all(isinstance(r, CssRung) for r in verified)
+    if fragile:
         notes.append("WARNING: only a CSS path survived verification — fragile target")
     fingerprint = Fingerprint(role=node.role, editable=node.editable if node.editable else None)
-    return TargetLadder(ladder=verified, context=node.context, fingerprint=fingerprint), notes
+    ladder = TargetLadder(
+        ladder=verified, context=node.context, fingerprint=fingerprint, fragile=fragile
+    )
+    return ladder, notes
 
 
 def _round_trips(surface: WebSurface, rung: Rung, node: ActionableNode) -> bool:
@@ -126,11 +130,24 @@ def _round_trips(surface: WebSurface, rung: Rung, node: ActionableNode) -> bool:
     except (SurfaceError, TargetAmbiguous):
         return False
     try:
-        target_handle = node.locator.element_handle()
-        same = bool(resolved.locator.evaluate("(a, b) => a === b", target_handle))
+        # Compared against the PINNED handle from observation time, so DOM
+        # churn between observation and act cannot swap the target.
+        same = bool(resolved.locator.evaluate("(a, b) => a === b", node.handle))
     except Exception:
         return False
     return same
+
+
+def _reject_param_text(label: str, text: str, params: dict[str, str]) -> None:
+    """Data-independence applies to EVERY model-supplied string that becomes
+    part of the artifact — anchors, headings, markers. A string carrying this
+    run's parameter value would work for this invocation and no other."""
+    for name, value in params.items():
+        if value and value in text:
+            raise DistillationError(
+                f"{label} {text!r} contains the value of parameter {name!r}; "
+                f"artifact strings must be data-independent"
+            )
 
 
 # ------------------------------------------------------------------ regions
@@ -168,8 +185,22 @@ def build_identity_checkpoint(
     """Build the checkpoint the planner proposed and PROVE it on the live
     page: the heading is visible, the identity region resolves, and it
     contains the invocation's parameter value with proper boundaries."""
+    _reject_param_text("checkpoint heading", checkpoint_heading, params)
+    _reject_param_text("identity anchor", identity_anchor, params)
     regions: dict[str, TargetLadder] = {}
     heading = RoleNameVisible(role="heading", name=checkpoint_heading, context=context)
+    # Prove the heading, not just the region: a model-proposed heading that
+    # is not actually visible right now must never enter the checkpoint.
+    try:
+        frame = surface.frame_for(context)
+        matches = frame.get_by_role("heading", name=checkpoint_heading, exact=True)
+        visible = any(matches.nth(i).is_visible() for i in range(matches.count()))
+    except Exception as exc:
+        raise DistillationError(f"cannot verify checkpoint heading: {exc}") from exc
+    if not visible:
+        raise DistillationError(
+            f"checkpoint heading {checkpoint_heading!r} is not visible on the live page"
+        )
     ladder = region_ladder(identity_anchor, context)
     container = verify_region(surface, ladder)
     text = container.inner_text(timeout=2000)
@@ -192,11 +223,18 @@ def build_output(
     spec_type: str,
     sensitive: bool,
     context: list[ContextSegment],
+    params: dict[str, str],
+    expected_value: str | None,
 ) -> tuple[OutputSpec, dict[str, TargetLadder]]:
-    """Build an output extractor from the planner's anchor and verify it
-    resolves and parses on the live page."""
+    """Build an output extractor from the planner's anchor and verify it:
+    the anchor is data-independent, resolves next to a value on the live
+    page, the value parses — and, when the request declares the expected
+    value for the example invocation, the extracted value MATCHES it.
+    Supervised discovery: a wrong anchor that happens to sit next to money
+    must not become a capability that returns wrong balances forever."""
     from hands.values import ValueError_, parse_money
 
+    _reject_param_text(f"output {name!r} anchor", anchor_text, params)
     region_name = f"output_{name}"
     ladder = region_ladder(anchor_text, context)
     container = verify_region(surface, ladder)
@@ -213,12 +251,21 @@ def build_output(
         ) from exc
     if spec_type == "decimal":
         try:
-            parse_money(raw)
+            parsed = parse_money(raw)
         except ValueError_ as exc:
             raise DistillationError(
                 f"output {name!r} read {'«masked»' if sensitive else raw!r} which does not "
                 f"parse as money — wrong anchor or wrong parse spec"
             ) from exc
+        if expected_value is not None and parsed != parse_money(expected_value):
+            raise DistillationError(
+                f"output {name!r} extracted a value that does not match the expected value "
+                f"declared for this example invocation — wrong anchor"
+            )
+    elif expected_value is not None and raw != expected_value:
+        raise DistillationError(
+            f"output {name!r} extracted a value that does not match the declared expected value"
+        )
     output = OutputSpec.model_validate(
         {
             "type": spec_type,
@@ -246,12 +293,8 @@ def build_outcome_condition(
     verify it: the region resolves, the marker is present in it right now, and
     — the data-independence rule — the marker contains no parameter value, so
     it will fire for every future invocation, not just this one's."""
-    for pname, pvalue in params.items():
-        if pvalue and pvalue in marker_text:
-            raise DistillationError(
-                f"outcome marker {marker_text!r} contains the value of parameter {pname!r}; "
-                f"markers must be data-independent"
-            )
+    _reject_param_text("outcome marker", marker_text, params)
+    _reject_param_text("outcome region anchor", region_anchor, params)
     region_name = f"outcome_{code.lower()}"
     ladder = region_ladder(region_anchor, context)
     container = verify_region(surface, ladder)
@@ -277,11 +320,18 @@ def scrub_url_pattern(url_path: str, params: dict[str, str]) -> str:
     """A URL postcondition must not embed the example run's parameter values —
     /member/12345 becomes /member/[^/]+ (data-independence for URLs)."""
     import re
+    from urllib.parse import quote
 
     pattern = re.escape(url_path)
-    for value in params.values():
-        if value:
-            pattern = pattern.replace(re.escape(value), "[^/]+")
+    values = sorted((v for v in params.values() if v), key=len, reverse=True)
+    for value in values:
+        for form in {value, quote(value, safe="")}:
+            pattern = pattern.replace(re.escape(form), "[^/]+")
+    for value in values:
+        if value in pattern:
+            raise DistillationError(
+                f"url pattern still contains a parameter value after scrubbing: {url_path!r}"
+            )
     return pattern
 
 

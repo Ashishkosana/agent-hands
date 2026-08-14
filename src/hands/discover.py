@@ -27,8 +27,9 @@ from hands.artifact import (
     TargetLadder,
     dump_capability,
 )
+from hands.llm import LlmError
 from hands.observe import build_observation
-from hands.planner import Planner, PlannerModel, PlannerResult
+from hands.planner import PlannedStep, Planner, PlannerModel, PlannerResult
 from hands.recorder import (
     DistillationError,
     assemble,
@@ -48,6 +49,12 @@ class _Model(BaseModel):
 class OutputRequest(_Model):
     type: Literal["decimal", "string"]
     sensitive: bool = False
+    # The known-correct value for the happy run's example invocation.
+    # Discovery is SUPERVISED: the requester knows what the example should
+    # return, and the recorder refuses an anchor whose extracted value
+    # doesn't match — a wrong anchor must not become a capability that
+    # returns wrong balances forever.
+    example_value: str | None = None
 
 
 class OutcomeRequest(_Model):
@@ -72,19 +79,22 @@ class DiscoveryRequest(_Model):
 
     @model_validator(mode="after")
     def _coherent(self) -> DiscoveryRequest:
-        if set(self.example_params) != set(self.parameters):
-            raise ValueError("example_params must cover exactly the declared parameters")
+        # Example values are declared for NON-sensitive parameters only;
+        # sensitive values are supplied at run time via HANDS_PARAM_<NAME>
+        # environment variables so they never live in a request file.
+        public = {n for n, spec in self.parameters.items() if not spec.sensitive}
+        if set(self.example_params) != public:
+            raise ValueError(
+                "example_params must cover exactly the non-sensitive parameters "
+                "(sensitive values come from HANDS_PARAM_<NAME> in the environment)"
+            )
         if self.identity_param not in self.parameters:
             raise ValueError("identity_param must be a declared parameter")
-        for name, spec in self.parameters.items():
-            if spec.sensitive and name in self.example_params:
-                raise ValueError(
-                    f"sensitive parameter {name!r} must not have a literal example value; "
-                    f"discovery for sensitive flows supplies values via the environment"
-                )
         for code, outcome in self.outcomes.items():
-            if set(outcome.params) != set(self.parameters):
-                raise ValueError(f"outcome {code!r} params must cover the declared parameters")
+            if set(outcome.params) != public:
+                raise ValueError(
+                    f"outcome {code!r} params must cover exactly the non-sensitive parameters"
+                )
         return self
 
 
@@ -96,7 +106,7 @@ def load_request(path: Path) -> DiscoveryRequest:
 class HappyParts:
     requires: list[RoleNameVisible]
     steps: list[dict[str, object]]
-    step_ids: list[str]
+    planned: list[PlannedStep]
     checkpoint: object
     outputs: dict[str, OutputSpec]
     regions: dict[str, TargetLadder]
@@ -127,6 +137,34 @@ class DiscoveryFailed(Exception):
         self.report = report
 
 
+def _effective_params(request: DiscoveryRequest, declared: dict[str, str]) -> dict[str, str]:
+    """Merge declared (non-sensitive) example values with sensitive values
+    from the environment. Sensitive values never live in request files."""
+    import os
+
+    params = dict(declared)
+    for name, spec in request.parameters.items():
+        if spec.sensitive:
+            env_var = f"HANDS_PARAM_{name.upper()}"
+            value = os.environ.get(env_var, "")
+            if not value:
+                raise DiscoveryFailed(
+                    f"sensitive parameter {name!r} requires {env_var} in the environment"
+                )
+            params[name] = value
+    return params
+
+
+def _param_notes(request: DiscoveryRequest, params: dict[str, str]) -> str:
+    """Per-leg parameter briefing: each leg is told ITS OWN values (never a
+    sensitive one, never another leg's)."""
+    return "\n".join(
+        f"- {{param:{name}}}: {spec.description}"
+        + ("" if spec.sensitive else f" (this run uses: {params.get(name, '')})")
+        for name, spec in request.parameters.items()
+    )
+
+
 def discover(
     request: DiscoveryRequest,
     model: PlannerModel,
@@ -136,25 +174,18 @@ def discover(
     headed: bool = False,
 ) -> DiscoveryReport:
     goal = request.goal_template
-    param_notes = "\n".join(
-        f"- {{param:{name}}}: {spec.description}"
-        + ("" if spec.sensitive else f" (this run uses: {request.example_params.get(name, '')})")
-        for name, spec in request.parameters.items()
-    )
     outcome_desc = {code: o.description for code, o in request.outcomes.items()}
 
     # ---- happy run: steps + checkpoint + outputs
-    happy, parts = _run_happy(
-        request, model, goal, param_notes, outcome_desc, runs_dir, headed
-    )
+    happy, parts = _run_happy(request, model, goal, outcome_desc, runs_dir, headed)
 
     # ---- one run per declared outcome: a live-verified recognizer each
     conditions: list[Condition] = []
     outcome_summaries: dict[str, RunSummary] = {}
     for code, outcome_request in request.outcomes.items():
         condition, new_regions, summary = _run_outcome(
-            request, model, code, outcome_request, param_notes, outcome_desc,
-            parts.step_ids, runs_dir, headed,
+            request, model, code, outcome_request, outcome_desc,
+            parts, runs_dir, headed,
         )
         merge_regions(parts.regions, new_regions, where=f"outcome {code}")
         conditions.append(condition)
@@ -186,7 +217,6 @@ def _run_happy(
     request: DiscoveryRequest,
     model: PlannerModel,
     goal: str,
-    param_notes: str,
     outcome_desc: dict[str, str],
     runs_dir: Path,
     headed: bool,
@@ -196,15 +226,19 @@ def _run_happy(
     run_dir = new_run_dir(runs_dir, f"discover-{request.name}")
     surface = WebSurface(headed=headed)
     started = _time.monotonic()
+    params = _effective_params(request, request.example_params)
     with Trace(run_dir) as trace:
         trace.emit("discovery_started", capability=request.name, leg="happy")
         try:
             surface.start(request.target.entry.web.url)
             requires = _entry_requires(surface)
             planner = Planner(model=model)
-            result = planner.run(
-                surface, trace, goal, request.example_params, param_notes, outcome_desc
-            )
+            try:
+                result = planner.run(
+                    surface, trace, goal, params, _param_notes(request, params), outcome_desc
+                )
+            except LlmError as exc:
+                raise DiscoveryFailed(f"model provider failed mid-run: {exc}") from exc
             summary = _summarize(result, _time.monotonic() - started)
             if result.ending != "done" or result.done is None:
                 raise DiscoveryFailed(
@@ -218,7 +252,7 @@ def _run_happy(
                 result.done.checkpoint_heading,
                 result.done.identity_anchor_text,
                 request.identity_param,
-                request.example_params,
+                params,
                 _contexts(context),
             )
             outputs: dict[str, OutputSpec] = {}
@@ -230,7 +264,8 @@ def _run_happy(
                         f"the run finished without locating requested output {name!r}"
                     )
                 output, new_regions = build_output(
-                    surface, name, anchor, spec.type, spec.sensitive, _contexts(context)
+                    surface, name, anchor, spec.type, spec.sensitive,
+                    _contexts(context), params, spec.example_value,
                 )
                 merge_regions(regions, new_regions, where=f"output {name}")
                 outputs[name] = output
@@ -250,7 +285,7 @@ def _run_happy(
             return summary, HappyParts(
                 requires=requires,
                 steps=steps,
-                step_ids=[s.id for s in result.steps],
+                planned=result.steps,
                 checkpoint=checkpoint,
                 outputs=outputs,
                 regions=regions,
@@ -266,9 +301,8 @@ def _run_outcome(
     model: PlannerModel,
     code: str,
     outcome_request: OutcomeRequest,
-    param_notes: str,
     outcome_desc: dict[str, str],
-    happy_step_ids: list[str],
+    parts: HappyParts,
     runs_dir: Path,
     headed: bool,
 ) -> tuple[Condition, dict[str, TargetLadder], RunSummary]:
@@ -277,6 +311,7 @@ def _run_outcome(
     run_dir = new_run_dir(runs_dir, f"discover-{request.name}-{code.lower()}")
     surface = WebSurface(headed=headed)
     started = _time.monotonic()
+    params = _effective_params(request, outcome_request.params)
     with Trace(run_dir) as trace:
         trace.emit("discovery_started", capability=request.name, leg=f"outcome:{code}")
         try:
@@ -287,9 +322,12 @@ def _run_outcome(
                 f"application shows that outcome, call report_outcome."
             )
             planner = Planner(model=model)
-            result = planner.run(
-                surface, trace, goal, outcome_request.params, param_notes, outcome_desc
-            )
+            try:
+                result = planner.run(
+                    surface, trace, goal, params, _param_notes(request, params), outcome_desc
+                )
+            except LlmError as exc:
+                raise DiscoveryFailed(f"model provider failed mid-run: {exc}") from exc
             summary = _summarize(result, _time.monotonic() - started)
             if result.ending != "outcome" or result.outcome is None:
                 raise DiscoveryFailed(
@@ -300,12 +338,12 @@ def _run_outcome(
                 raise DiscoveryFailed(
                     f"outcome run for {code} reported {result.outcome.code!r} instead"
                 )
-            # Arm the recognizer at the same position in the happy flow that
-            # this run had reached when the outcome appeared.
-            acted = len(result.steps)
-            if acted == 0 or not happy_step_ids:
-                raise DiscoveryFailed(f"outcome run for {code} acted no steps; cannot arm")
-            armed_after = happy_step_ids[min(acted, len(happy_step_ids)) - 1]
+            # Arm the recognizer at the position this run reached in the HAPPY
+            # flow — legitimate only if the two runs actually took the same
+            # steps. A positional guess across divergent paths would arm the
+            # recognizer at the wrong step; divergence is surfaced, not
+            # guessed around.
+            armed_after = _arming_step(parts.planned, result.steps, code)
             context = result.steps[-1].target["context"]
             condition, regions = build_outcome_condition(
                 surface,
@@ -313,7 +351,7 @@ def _run_outcome(
                 result.outcome.marker_text,
                 result.outcome.region_anchor_text,
                 armed_after,
-                outcome_request.params,
+                params,
                 _contexts(context),
             )
             trace.emit("discovery_distilled", condition=condition.id, armed_after=armed_after)
@@ -322,6 +360,36 @@ def _run_outcome(
             raise DiscoveryFailed(f"distillation failed for outcome {code}: {exc}") from exc
         finally:
             surface.stop()
+
+
+def _arming_step(
+    happy: list[PlannedStep], outcome_steps: list[PlannedStep], code: str
+) -> str:
+    """The happy-run step id after which the recognizer arms. Valid only when
+    the outcome run's acted steps are a structural prefix of the happy run
+    (same action kinds, same primary locator rung)."""
+    if not outcome_steps:
+        raise DiscoveryFailed(f"outcome run for {code} acted no steps; cannot arm a recognizer")
+    if len(outcome_steps) > len(happy):
+        raise DiscoveryFailed(
+            f"outcome run for {code} took more steps than the happy run; the paths "
+            f"diverge and the recognizer cannot be positionally armed"
+        )
+    for happy_step, outcome_step in zip(happy, outcome_steps, strict=False):
+        same_kind = happy_step.action.get("kind") == outcome_step.action.get("kind")
+        same_rung = _primary_rung(happy_step) == _primary_rung(outcome_step)
+        if not (same_kind and same_rung):
+            raise DiscoveryFailed(
+                f"outcome run for {code} diverged from the happy path at step "
+                f"{outcome_step.id} ({outcome_step.intent!r} vs {happy_step.intent!r}); "
+                f"a recognizer cannot be honestly armed across divergent flows"
+            )
+    return happy[len(outcome_steps) - 1].id
+
+
+def _primary_rung(step: PlannedStep) -> object:
+    ladder = step.target.get("ladder")
+    return ladder[0] if isinstance(ladder, list) and ladder else None
 
 
 def _entry_requires(surface: WebSurface) -> list[RoleNameVisible]:

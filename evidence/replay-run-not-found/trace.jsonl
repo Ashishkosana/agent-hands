@@ -1,0 +1,9 @@
+{"ts": "2026-08-14T06:51:15.417+00:00", "event": "run_started", "capability": "lookup_member_balance", "version": 1, "artifact_sha256": "62f5fa6b4eb92f36f1e7445ec3f17f1dd25039ae6940f64fcc56cd107551ff4b", "params": {"member_id": "99999"}}
+{"ts": "2026-08-14T06:51:15.767+00:00", "event": "requires_met"}
+{"ts": "2026-08-14T06:51:15.767+00:00", "event": "step_started", "step": "s1", "intent": "Enter member ID", "risk": "safe"}
+{"ts": "2026-08-14T06:51:15.803+00:00", "event": "acted", "step": "s1", "action": "type", "rung": "relative:nearest_input_right of (text='Member ID')", "rung_index": 0, "text": "99999"}
+{"ts": "2026-08-14T06:51:15.805+00:00", "event": "postconditions_met", "step": "s1"}
+{"ts": "2026-08-14T06:51:15.805+00:00", "event": "step_started", "step": "s2", "intent": "Search for member", "risk": "risky"}
+{"ts": "2026-08-14T06:51:15.855+00:00", "event": "acted", "step": "s2", "action": "click", "rung": "role=button name='Search'", "rung_index": 0, "text": null}
+{"ts": "2026-08-14T06:51:16.139+00:00", "event": "recognizer_fired", "condition": "cond_member_not_found", "outcome": "MEMBER_NOT_FOUND", "matched": "No member matches ID 99999."}
+{"ts": "2026-08-14T06:51:16.167+00:00", "event": "run_finished", "result": {"result": "business_outcome", "code": "MEMBER_NOT_FOUND", "description": "No member exists with this ID.", "evidence": {"condition_id": "cond_member_not_found", "region": "outcome_member_not_found", "role": null, "matched_text": "No member matches ID 99999."}}}

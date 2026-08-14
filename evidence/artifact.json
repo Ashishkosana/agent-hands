@@ -1,0 +1,288 @@
+{
+  "schema_version": 1,
+  "name": "lookup_member_balance",
+  "version": 1,
+  "description": "Look up a member by ID in the Fairview Teller Console and read their current savings balance.",
+  "target": {
+    "app": "fairview-teller",
+    "entry": {
+      "web": {
+        "url": "http://127.0.0.1:8000/"
+      }
+    }
+  },
+  "requires": [
+    {
+      "kind": "role_name_visible",
+      "role": "heading",
+      "name": "Fairview Teller Console",
+      "context": [
+        {
+          "name": "main",
+          "url_pattern": null,
+          "ordinal": null
+        }
+      ]
+    }
+  ],
+  "parameters": {
+    "member_id": {
+      "type": "string",
+      "description": "Member number as printed on statements",
+      "sensitive": false,
+      "example": "12345",
+      "pattern": "[0-9]{1,10}"
+    }
+  },
+  "outcomes": {
+    "MEMBER_NOT_FOUND": {
+      "description": "No member exists with this ID."
+    }
+  },
+  "outputs": {
+    "savings_balance": {
+      "type": "decimal",
+      "sensitive": true,
+      "region": "output_savings_balance",
+      "from": {
+        "ladder": [
+          {
+            "strategy": "relative",
+            "relation": "cell_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Savings"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": null
+      },
+      "parse": {
+        "kind": "money",
+        "locale": "en_US"
+      }
+    }
+  },
+  "regions": {
+    "identity": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "anchor": {
+            "strategy": "text",
+            "text": "Member #"
+          },
+          "container": "table"
+        }
+      ],
+      "context": [
+        {
+          "name": "main",
+          "url_pattern": null,
+          "ordinal": null
+        }
+      ],
+      "fingerprint": null
+    },
+    "output_savings_balance": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "anchor": {
+            "strategy": "text",
+            "text": "Savings"
+          },
+          "container": "table"
+        }
+      ],
+      "context": [
+        {
+          "name": "main",
+          "url_pattern": null,
+          "ordinal": null
+        }
+      ],
+      "fingerprint": null
+    },
+    "outcome_member_not_found": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "anchor": {
+            "strategy": "text",
+            "text": "Search Results"
+          },
+          "container": "table"
+        }
+      ],
+      "context": [
+        {
+          "name": "main",
+          "url_pattern": null,
+          "ordinal": null
+        }
+      ],
+      "fingerprint": null
+    }
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Enter member ID",
+      "action": {
+        "kind": "type",
+        "text": "{param:member_id}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Member ID"
+            },
+            "container": null
+          },
+          {
+            "strategy": "css",
+            "css": "tr:nth-of-type(1) > td > form > table > tbody > tr:nth-of-type(2) > td:nth-of-type(2) > input"
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        }
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "member_id",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s2",
+      "intent": "Search for member",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "button",
+            "name": "Search"
+          },
+          {
+            "strategy": "text",
+            "text": "Search"
+          },
+          {
+            "strategy": "css",
+            "css": "tr:nth-of-type(1) > td > form > table > tbody > tr:nth-of-type(3) > td:nth-of-type(2) > input"
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "button",
+          "editable": null
+        }
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Member Details",
+          "context": [
+            {
+              "name": "main",
+              "url_pattern": null,
+              "ordinal": null
+            }
+          ]
+        }
+      ],
+      "risk": "risky"
+    }
+  ],
+  "conditions": [
+    {
+      "id": "cond_member_not_found",
+      "armed_after": "s2",
+      "match": {
+        "kind": "region_text",
+        "region": "outcome_member_not_found",
+        "patterns": [
+          "No member matches ID"
+        ]
+      },
+      "classify": "business_outcome",
+      "outcome_code": "MEMBER_NOT_FOUND",
+      "provenance": "discovered",
+      "verified_by_eval": false
+    }
+  ],
+  "checkpoint": {
+    "all": [
+      {
+        "kind": "role_name_visible",
+        "role": "heading",
+        "name": "Member Details",
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ]
+      },
+      {
+        "kind": "region_text_matches_param",
+        "region": "identity",
+        "param": "member_id"
+      }
+    ]
+  },
+  "allow_unbound_checkpoint": false,
+  "risk_review": {
+    "reviewed_by": null,
+    "artifact_hash": null
+  }
+}

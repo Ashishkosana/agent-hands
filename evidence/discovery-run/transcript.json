@@ -1,0 +1,74 @@
+[
+  {
+    "role": "system",
+    "content": "You operate a real web application to accomplish a goal, one action at a time.\n\nRules:\n- Call exactly one tool per turn.\n- Only act on refs listed in the CURRENT observation. Refs change every turn.\n- To enter a parameter value, type the placeholder exactly as given (e.g. {param:member_id}); the system substitutes the real value. Never invent parameter values.\n- If the application answers with a legitimate business outcome you were told to expect (e.g. a record does not exist), call report_outcome \u2014 that is a correct ending.\n- When the goal state is on screen, call done with the exact heading text you can see, the label next to the identifying value, and the label next to each requested output value.\n- Anchors and markers must be exact visible text, and must never contain the specific parameter values of this run.\n- If you cannot proceed safely, call stuck. Never guess."
+  },
+  {
+    "role": "user",
+    "content": "GOAL: Look up the member whose ID is {param:member_id} and read their current savings balance.\n\nPARAMETERS (use placeholders, never invent values):\n- {param:member_id}: Member number as printed on statements (this run uses: 12345)\n\nEXPECTED BUSINESS OUTCOMES you may report:\n- MEMBER_NOT_FOUND: No member exists with this ID."
+  },
+  {
+    "role": "user",
+    "content": "URL: http://127.0.0.1:8000/\n--- frame (top) ---\n\n--- frame nav ---\nMENU\nMember Search\nReports\nAdmin\n--- frame main ---\nFairview Teller Console\n\nFAIRVIEW FEDERAL CREDIT UNION \u2014 INTERNAL USE ONLY \u2014 TELLER OPERATIONS\nMember Lookup\nMember ID\t\n\u00a0\t\n\nTip: if no member matches, verify the ID.\n--- actionable elements (act on these refs only) ---\n[e1] link name='Member Search' frame=nav\n[e2] link name='Reports' frame=nav\n[e3] link name='Admin' frame=nav\n[e4] textbox nearby_label='Member ID' frame=main\n[e5] button name='Search' frame=main"
+  },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      {
+        "id": "fc_5d6cfd95-ece5-4773-8b00-05a8f6b14b25",
+        "function": {
+          "arguments": "{\"intent\":\"Enter member ID\",\"kind\":\"type\",\"ref\":\"e4\",\"text\":\"{param:member_id}\"}",
+          "name": "act"
+        },
+        "type": "function"
+      }
+    ],
+    "reasoning": "We need to look up member ID 12345. We have a textbox e4 for Member ID, and a Search button e5. So type the placeholder {param:member_id} into e4, then click Search. We'll do two actions, but only one per turn. First type."
+  },
+  {
+    "role": "tool",
+    "tool_call_id": "fc_5d6cfd95-ece5-4773-8b00-05a8f6b14b25",
+    "content": "ok"
+  },
+  {
+    "role": "user",
+    "content": "URL: http://127.0.0.1:8000/\n--- frame (top) ---\n\n--- frame nav ---\nMENU\nMember Search\nReports\nAdmin\n--- frame main ---\nFairview Teller Console\n\nFAIRVIEW FEDERAL CREDIT UNION \u2014 INTERNAL USE ONLY \u2014 TELLER OPERATIONS\nMember Lookup\nMember ID\t\n\u00a0\t\n\nTip: if no member matches, verify the ID.\n--- actionable elements (act on these refs only) ---\n[e1] link name='Member Search' frame=nav\n[e2] link name='Reports' frame=nav\n[e3] link name='Admin' frame=nav\n[e4] textbox nearby_label='Member ID' value='12345' frame=main\n[e5] button name='Search' frame=main"
+  },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      {
+        "id": "fc_34ef6bd1-0ba0-4d4d-a9e2-8930b7c5546d",
+        "function": {
+          "arguments": "{\"intent\":\"Search for member\",\"kind\":\"click\",\"ref\":\"e5\"}",
+          "name": "act"
+        },
+        "type": "function"
+      }
+    ],
+    "reasoning": "Now click Search."
+  },
+  {
+    "role": "tool",
+    "tool_call_id": "fc_34ef6bd1-0ba0-4d4d-a9e2-8930b7c5546d",
+    "content": "ok"
+  },
+  {
+    "role": "user",
+    "content": "URL: http://127.0.0.1:8000/\n--- frame (top) ---\n\n--- frame nav ---\nMENU\nMember Search\nReports\nAdmin\n--- frame main ---\nFairview Teller Console\n\nFAIRVIEW FEDERAL CREDIT UNION \u2014 INTERNAL USE ONLY \u2014 TELLER OPERATIONS\nMember Details\nMember #\t12345\nName\tPat Ruiz\n\n\nAccount\tBalance\nSavings\t$1,234.50\nChecking\t$987.65\n--- actionable elements (act on these refs only) ---\n[e1] link name='Member Search' frame=nav\n[e2] link name='Reports' frame=nav\n[e3] link name='Admin' frame=nav"
+  },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      {
+        "id": "fc_7b76f5c4-b5b6-4bd8-b0a0-50740ac607b8",
+        "function": {
+          "arguments": "{\"checkpoint_heading\":\"Member Details\",\"identity_anchor_text\":\"Member #\",\"outputs\":[{\"anchor_text\":\"Savings\",\"name\":\"savings_balance\"}],\"summary\":\"Retrieved the savings balance for member 12345.\"}",
+          "name": "done"
+        },
+        "type": "function"
+      }
+    ],
+    "reasoning": "Goal: read current savings balance. We have Member Details page showing Savings $1,234.50. Need to call done with heading text, identity anchor, outputs. Heading likely \"Member Details\". Identity anchor label next to ID is \"Member #\". Output label is \"Savings\". Provide name maybe \"savings_balance\". Provide summary."
+  }
+]

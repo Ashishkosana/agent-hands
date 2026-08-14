@@ -232,6 +232,32 @@ class Planner:
         url_before = surface.page.url
         messages.append({"role": "user", "content": observation.render()})
 
+        try:
+            return self._loop(
+                surface, trace, messages, observation, headings_before, url_before,
+                params, outcome_codes, result,
+            )
+        finally:
+            # The full model transcript is evidence of the run — decoupled
+            # from the artifact, which never contains any of it.
+            import json as _json
+
+            (trace.run_dir / "transcript.json").write_text(
+                _json.dumps(messages, indent=2, default=str)
+            )
+
+    def _loop(
+        self,
+        surface: WebSurface,
+        trace: Trace,
+        messages: list[Message],
+        observation: Observation,
+        headings_before: set[str],
+        url_before: str,
+        params: dict[str, str],
+        outcome_codes: dict[str, str],
+        result: PlannerResult,
+    ) -> PlannerResult:
         while result.llm_calls < self.max_steps + self.max_invalid:
             turn = self.model.complete(messages, TOOLS)
             result.llm_calls += 1

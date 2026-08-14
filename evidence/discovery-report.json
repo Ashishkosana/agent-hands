@@ -1,0 +1,23 @@
+{
+  "artifact": "capabilities/generated/lookup_member_balance.json",
+  "happy": {
+    "ending": "done",
+    "steps": 2,
+    "llm_calls": 3,
+    "prompt_tokens": 3168,
+    "completion_tokens": 294,
+    "invalid_proposals": 0,
+    "duration_s": 3.87
+  },
+  "outcomes": {
+    "MEMBER_NOT_FOUND": {
+      "ending": "outcome",
+      "steps": 2,
+      "llm_calls": 3,
+      "prompt_tokens": 3282,
+      "completion_tokens": 285,
+      "invalid_proposals": 0,
+      "duration_s": 2.5
+    }
+  }
+}

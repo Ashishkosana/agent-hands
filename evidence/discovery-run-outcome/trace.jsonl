@@ -1,0 +1,8 @@
+{"ts": "2026-08-14T06:51:11.544+00:00", "event": "discovery_started", "capability": "lookup_member_balance", "leg": "outcome:MEMBER_NOT_FOUND"}
+{"ts": "2026-08-14T06:51:12.780+00:00", "event": "llm_call", "prompt_tokens": 844, "completion_tokens": 109}
+{"ts": "2026-08-14T06:51:12.829+00:00", "event": "planner_acted", "step": "s1", "kind": "type", "intent": "Enter member ID", "risk": "safe", "ladder": ["relative", "css"], "notes": []}
+{"ts": "2026-08-14T06:51:13.411+00:00", "event": "llm_call", "prompt_tokens": 1112, "completion_tokens": 37}
+{"ts": "2026-08-14T06:51:13.486+00:00", "event": "planner_acted", "step": "s2", "kind": "click", "intent": "Search for member", "risk": "risky", "ladder": ["role", "text", "css"], "notes": []}
+{"ts": "2026-08-14T06:51:14.039+00:00", "event": "llm_call", "prompt_tokens": 1326, "completion_tokens": 139}
+{"ts": "2026-08-14T06:51:14.039+00:00", "event": "planner_outcome", "code": "MEMBER_NOT_FOUND"}
+{"ts": "2026-08-14T06:51:14.050+00:00", "event": "discovery_distilled", "condition": "cond_member_not_found", "armed_after": "s2"}

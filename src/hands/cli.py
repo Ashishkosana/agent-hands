@@ -7,6 +7,7 @@ is not a malfunction); 1 = FAILURE or PRECONDITION_FAILED; 2 = usage error.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -56,12 +57,21 @@ def main(argv: list[str] | None = None) -> int:
     discover_cmd.add_argument("--runs-dir", type=Path, default=Path("runs"))
     discover_cmd.add_argument("--model", default=None, help="override the configured model")
 
+    explain_cmd = sub.add_parser(
+        "explain", help="print an audit receipt reconstructing a recorded run"
+    )
+    explain_cmd.add_argument("run_id", help="a run directory name under --runs-dir")
+    explain_cmd.add_argument("--runs-dir", type=Path, default=Path("runs"))
+    explain_cmd.add_argument("--gen-dir", type=Path, default=Path("capabilities/generated"))
+
     args = parser.parse_args(argv)
 
     if args.command == "discover":
         return _discover(parser, args)
     if args.command == "review":
         return _review(parser, args)
+    if args.command == "explain":
+        return _explain(parser, args)
 
     params: dict[str, str] = {}
     for item in args.param:
@@ -110,6 +120,104 @@ def _review(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
         f"signed by {args.operator!r}: {len(risky)} risky step(s) {risky}, "
         f"hash {signed.risk_review.artifact_hash[:16] if signed.risk_review.artifact_hash else ''}…"
     )
+    return 0
+
+
+def _explain(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    """Reconstruct a recorded run as a single examiner-grade audit receipt:
+    which contract ran (+ hash), who signed it, the full decision trace, proof
+    no model was in the loop, the typed result, and the evidence. Assembled
+    from files replay already writes — model-free."""
+    import hashlib
+
+    from hands.artifact import dump_capability, risk_review_valid
+
+    run_dir = args.runs_dir / args.run_id
+    trace_file = run_dir / "trace.jsonl"
+    if not trace_file.exists():
+        parser.error(f"no trace at {trace_file}")
+
+    events: list[dict[str, object]] = []
+    for line in trace_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line:
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+
+    started = next((e for e in events if e.get("event") == "run_started"), None)
+    finished = next((e for e in events if e.get("event") == "run_finished"), None)
+    if started is None:
+        parser.error("not a replay run (no run_started event)")
+        return 2  # pragma: no cover
+
+    name = str(started.get("capability", "?"))
+    version = started.get("version", "?")
+    run_hash = str(started.get("artifact_sha256", ""))
+
+    # Contract status vs the artifact on disk now, plus the signer.
+    status, signer = "unknown (artifact not found)", "—"
+    art = args.gen_dir / f"{name}.json"
+    if art.exists():
+        try:
+            cap = load_capability(art)
+            cur_hash = hashlib.sha256(dump_capability(cap).encode()).hexdigest()
+            status = (
+                "VERIFIED — byte-identical to the artifact on disk"
+                if cur_hash == run_hash
+                else "DRIFTED — the artifact changed since this run"
+            )
+            rv = cap.risk_review
+            signer = (
+                f"signed by {rv.reviewed_by!r} "
+                f"({'valid' if risk_review_valid(cap) else 'INVALID'})"
+                if rv.reviewed_by
+                else "unsigned"
+            )
+        except (OSError, ValueError):
+            pass
+
+    model_events = [
+        e for e in events
+        if any(k in str(e.get("event", "")) for k in ("llm", "model", "planner", "discovery"))
+    ]
+
+    bar = "=" * 62
+    out = [bar, f" AUDIT RECEIPT  ·  {args.run_id}", bar,
+           f" Capability:      {name}  v{version}",
+           f" Contract hash:   {run_hash}",
+           f" Contract status: {status}",
+           f" Risk sign-off:   {signer}",
+           f" Inputs (masked): {started.get('params', {})}",
+           "", " -- Decision trace --"]
+    for e in events:
+        ev = str(e.get("event", ""))
+        ts = str(e.get("ts", ""))[11:23]
+        if ev == "step_started":
+            out.append(f"  {ts}  STEP {e.get('step')}  {e.get('intent')}  ({e.get('risk')})")
+        elif ev == "acted":
+            out.append(f"  {ts}       -> acted ({e.get('action')}) via {e.get('rung')}")
+        elif ev == "postconditions_met":
+            out.append(f"  {ts}       ok verified")
+        elif ev == "recognizer_fired":
+            out.append(f"  {ts}  [!] recognized {e.get('outcome')} -- {e.get('matched')}")
+        elif ev == "checkpoint_verified":
+            out.append(f"  {ts}  CHECKPOINT ok -- confirmed the right record")
+        elif ev == "output_extracted":
+            out.append(f"  {ts}  OUTPUT {e.get('name')} = {e.get('value')}")
+        elif ev.startswith(("escalat", "operator_", "human_", "evidence_suppressed")):
+            out.append(f"  {ts}  [human] {ev}")
+    det = "NO model in the decision loop" if not model_events else "WARNING: model events present"
+    out += ["", " -- Determinism --",
+            f" Model/LLM events in this run: {len(model_events)}  ->  {det}",
+            "", " -- Result --",
+            f" {json.dumps((finished or {}).get('result', {}))}",
+            "", " -- Evidence --"]
+    ev_files = sorted(p.name for p in run_dir.iterdir() if p.name != "trace.jsonl")
+    out.append(" " + (", ".join(ev_files) if ev_files else "none (clean run)"))
+    out.append(bar)
+    print("\n".join(out))
     return 0
 
 

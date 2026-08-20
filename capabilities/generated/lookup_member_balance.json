@@ -292,7 +292,7 @@
   },
   "allow_unbound_checkpoint": false,
   "risk_review": {
-    "reviewed_by": "ashishk",
+    "reviewed_by": "ashish",
     "artifact_hash": "e5e390da17f4624b1c4dfb13dac843d340eee2c085c9efabe661239933434d50"
   }
 }

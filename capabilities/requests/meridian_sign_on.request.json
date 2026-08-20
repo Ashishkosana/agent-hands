@@ -1,0 +1,33 @@
+{
+  "name": "meridian_sign_on",
+  "description": "Sign on to the MERIDIAN CORE member-services console as a teller operator.",
+  "target": {
+    "app": "meridian-core",
+    "entry": {
+      "web": {
+        "url": "https://web-sample.interface-hiring.com/"
+      }
+    }
+  },
+  "goal_template": "Sign on to the console as operator {param:operator_id} using the provided password, then reach the main menu.",
+  "parameters": {
+    "operator_id": {
+      "type": "string",
+      "description": "Operator sign-on ID",
+      "sensitive": false,
+      "example": "teller1",
+      "pattern": "[a-zA-Z0-9_]{1,32}"
+    },
+    "password": {
+      "type": "string",
+      "description": "Operator password",
+      "sensitive": true
+    }
+  },
+  "example_params": {
+    "operator_id": "teller1"
+  },
+  "identity_param": "operator_id",
+  "outputs": {},
+  "outcomes": {}
+}

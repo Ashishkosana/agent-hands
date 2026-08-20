@@ -37,6 +37,12 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
+[tool.ruff.lint.per-file-ignores]
+# Demo-driver surfaces: the dashboard embeds HTML/CSS templates and the chatbot
+# embeds prompt/tool literals; line-length does not apply meaningfully there.
+"dashboard/*" = ["E501"]
+"chatbot/*" = ["E501"]
+
 [tool.mypy]
 strict = true
 python_version = "3.12"

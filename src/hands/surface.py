@@ -361,6 +361,27 @@ class WebSurface:
     def click(self, resolved: ResolvedTarget) -> None:
         resolved.locator.click(timeout=self.attempt_timeout_ms)
 
+    def select_option(self, resolved: ResolvedTarget, option: str, match: str) -> None:
+        """Choose an option from a native <select>, enforcing option-level
+        uniqueness the same way the ladder does for elements: 0 matching
+        options is a hard failure, >1 is ambiguity (never pick the first),
+        exactly 1 is selected by index. ``match`` is exact ``label`` or a stable
+        ``contains`` substring (legacy labels embed volatile text like a live
+        balance, so the whole label is not a safe key)."""
+        labels = resolved.locator.locator("option").all_inner_texts()
+        if match == "label":
+            idxs = [i for i, lbl in enumerate(labels) if lbl.strip() == option.strip()]
+        else:
+            idxs = [i for i, lbl in enumerate(labels) if option in lbl]
+        if not idxs:
+            raise SurfaceError(f"no dropdown option matches {option!r} (match={match})")
+        if len(idxs) > 1:
+            raise SurfaceError(
+                f"dropdown option {option!r} is ambiguous: "
+                f"{len(idxs)} options match (match={match})"
+            )
+        resolved.locator.select_option(index=idxs[0], timeout=self.attempt_timeout_ms)
+
     def goto(self, url: str) -> None:
         self.page.goto(url)
 

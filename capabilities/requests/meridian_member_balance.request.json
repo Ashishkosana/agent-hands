@@ -1,0 +1,56 @@
+{
+  "name": "meridian_member_balance",
+  "description": "Sign on to MERIDIAN CORE, look up a member, and read their checking (Share Draft) account balance.",
+  "target": {
+    "app": "meridian-core",
+    "entry": {
+      "web": {
+        "url": "https://web-sample.interface-hiring.com/"
+      }
+    }
+  },
+  "goal_template": "Sign on as operator {param:operator_id} using the provided password to reach the Main Menu. Then click the 'Member Inquiry' link in the TOP NAVIGATION BAR (not the numbered menu option). On the Member Inquiry page the 'Search by' dropdown is already set to Member Number, so do not change it — type member number {param:member_number} into the Value box and click Search. If a matching member is listed, click 'Select' to open the Member Record, then read their Share Draft (Checking) account balance.",
+  "parameters": {
+    "operator_id": {
+      "type": "string",
+      "description": "Operator sign-on ID",
+      "sensitive": false,
+      "example": "teller1",
+      "pattern": "[a-zA-Z0-9_]{1,32}"
+    },
+    "password": {
+      "type": "string",
+      "description": "Operator password",
+      "sensitive": true
+    },
+    "member_number": {
+      "type": "string",
+      "description": "Member number to look up",
+      "sensitive": false,
+      "example": "100234",
+      "pattern": "[0-9]{1,10}"
+    }
+  },
+  "example_params": {
+    "operator_id": "teller1",
+    "member_number": "100234"
+  },
+  "identity_param": "member_number",
+  "outputs": {
+    "checking_balance": {
+      "type": "decimal",
+      "sensitive": true,
+      "example_value": null
+    }
+  },
+  "outcomes": {
+    "MEMBER_NOT_FOUND": {
+      "description": "No member exists with the given member number.",
+      "params": {
+        "operator_id": "teller1",
+        "member_number": "999999"
+      },
+      "identity_param": "member_number"
+    }
+  }
+}

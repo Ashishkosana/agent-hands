@@ -37,7 +37,8 @@ Five invariants the whole design serves:
 ```
 
 Components, each independently testable: **Surface** (perceive/act seam),
-**Planner** (LLM tool-use loop, Anthropic SDK), **Recorder** (trace → artifact),
+**Planner** (LLM tool-use loop over an OpenAI-compatible client, Groq-hosted by
+default), **Recorder** (trace → artifact),
 **Replay engine** (zero model dependency), **Policy**, **Escalation**, **Trace**.
 
 ## The capability artifact

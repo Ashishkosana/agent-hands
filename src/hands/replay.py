@@ -30,6 +30,8 @@ from pathlib import Path
 from hands.artifact import (
     Capability,
     Condition,
+    OptionSelected,
+    SelectAction,
     Step,
     TypeAction,
     ValueMatchesParam,
@@ -139,6 +141,7 @@ class ReplayEngine:
     def __init__(self, config: EngineConfig | None = None) -> None:
         self.config = config or EngineConfig()
         self._hub: EscalationHub | None = None
+        self.last_run_dir: Path | None = None  # set per run; lets the API/dashboard find evidence
 
     def run(self, capability: Capability, params: dict[str, str]) -> ReplayResult:
         self._validate_params(capability, params)
@@ -159,6 +162,7 @@ class ReplayEngine:
                 "(sign with: hands review <artifact> --operator <name>)",
             )
         run_dir = new_run_dir(self.config.runs_dir, capability.name)
+        self.last_run_dir = run_dir  # so a caller (the API/dashboard) can find this run's evidence
         surface = WebSurface(
             headed=self.config.headed, attempt_timeout_ms=self.config.attempt_timeout_ms
         )
@@ -440,6 +444,9 @@ class ReplayEngine:
         if isinstance(action, TypeAction):
             assert resolved is not None  # guaranteed by schema validator
             surface.type_text(resolved, resolve_text(action.text, params))
+        elif isinstance(action, SelectAction):
+            assert resolved is not None
+            surface.select_option(resolved, resolve_text(action.option, params), action.match)
         elif action.kind == "click":
             assert resolved is not None
             surface.click(resolved)
@@ -648,9 +655,9 @@ class ReplayEngine:
     ) -> bool:
         if not step.post:
             return False
-        if any(isinstance(c, ValueMatchesParam) for c in step.post):
-            # Value postconditions need the resolved target, which the failed
-            # attempt may not have produced; don't guess.
+        if any(isinstance(c, (ValueMatchesParam, OptionSelected)) for c in step.post):
+            # Value/option postconditions need the resolved target, which the
+            # failed attempt may not have produced; don't guess.
             return False
         return all(post_holds(surface, c, capability, params, None) for c in step.post)
 
@@ -863,7 +870,7 @@ class ReplayEngine:
     ) -> bool:
         resolved = None
         if step.target is not None and any(
-            isinstance(c, ValueMatchesParam) for c in step.post
+            isinstance(c, (ValueMatchesParam, OptionSelected)) for c in step.post
         ):
             try:
                 resolved = surface.resolve(step.target)

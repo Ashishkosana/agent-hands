@@ -12,3 +12,8 @@ dist/
 
 # transient run output (curated runs are copied into evidence/, which IS tracked)
 runs/
+.playwright-mcp/
+.serena/
+docs/build/
+docs/BUILD_PLAN_CONTEXT.md
+docs/decision-board.html

@@ -205,8 +205,19 @@ class ValueMatchesParam(_Model):
     normalize: Normalize = "none"
 
 
+class OptionSelected(_Model):
+    """Postcondition on a select step: the dropdown's currently-selected option
+    label matches (exact `label` or stable `contains` substring). The select
+    analogue of value_matches_param — no unverified selects."""
+
+    kind: Literal["option_selected"] = "option_selected"
+    option: str
+    match: Literal["label", "contains"] = "label"
+
+
 PostCondition = Annotated[
     ValueMatchesParam
+    | OptionSelected
     | RoleNameVisible
     | RoleNameAbsent
     | TextVisible
@@ -312,7 +323,22 @@ class NavigateAction(_Model):
     url: str
 
 
-Action = Annotated[TypeAction | ClickAction | NavigateAction, Field(discriminator="kind")]
+class SelectAction(_Model):
+    """Choose an option from a native <select> dropdown. `option` is the option
+    to pick (may carry a {param} placeholder); `match` says how to match it to
+    the visible option labels — exact `label`, or a stable `contains` substring
+    (legacy dropdowns often embed volatile text like a live balance in the
+    label, so matching the whole label would break run to run)."""
+
+    kind: Literal["select"] = "select"
+    option: str
+    match: Literal["label", "contains"] = "label"
+
+
+Action = Annotated[
+    TypeAction | ClickAction | NavigateAction | SelectAction,
+    Field(discriminator="kind"),
+]
 
 Risk = Literal["safe", "risky"]
 
@@ -328,7 +354,7 @@ class Step(_Model):
 
     @model_validator(mode="after")
     def _target_required(self) -> Step:
-        needs_target = self.action.kind in ("type", "click")
+        needs_target = self.action.kind in ("type", "click", "select")
         if needs_target and self.target is None:
             raise ValueError(f"step {self.id!r}: {self.action.kind} action requires a target")
         if not needs_target and self.target is not None:
@@ -457,6 +483,12 @@ class Capability(_Model):
                         raise ValueError(
                             f"step {step.id!r}: text references undeclared parameter {ref!r}"
                         )
+            elif step.action.kind == "select":
+                for ref in placeholders_in(step.action.option):
+                    if ref not in known_params:
+                        raise ValueError(
+                            f"step {step.id!r}: option references undeclared parameter {ref!r}"
+                        )
             for post in step.post:
                 if isinstance(post, ValueMatchesParam) and post.param not in known_params:
                     raise ValueError(f"step {step.id!r}: undeclared parameter {post.param!r}")
@@ -476,6 +508,8 @@ class Capability(_Model):
         for step in self.steps:
             if step.action.kind == "type":
                 used.update(placeholders_in(step.action.text))
+            elif step.action.kind == "select":
+                used.update(placeholders_in(step.action.option))
             for post in step.post:
                 if isinstance(post, ValueMatchesParam):
                     used.add(post.param)

@@ -8,6 +8,7 @@ change, which is the honest answer to "why this provider?".
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import time
@@ -50,7 +51,9 @@ class LlmClient:
     api_key: str = field(repr=False)
     model: str = DEFAULT_MODEL
     base_url: str = DEFAULT_BASE_URL
-    max_retries: int = 3
+    max_retries: int = 8
+    # Some providers (Anthropic's Claude models) reject `temperature`; None omits it.
+    temperature: float | None = 0.0
     _client: OpenAI = field(init=False)
 
     def __post_init__(self) -> None:
@@ -62,18 +65,20 @@ class LlmClient:
         last_error: Exception | None = None
         for attempt in range(self.max_retries):
             try:
-                response = self._client.chat.completions.create(  # type: ignore[call-overload]
+                kwargs: dict[str, Any] = dict(
                     model=self.model,
                     messages=messages,
                     tools=tools,
                     tool_choice="required",
                     parallel_tool_calls=False,  # one action per turn is the loop's contract
-                    temperature=0.0,
                 )
+                if self.temperature is not None:
+                    kwargs["temperature"] = self.temperature
+                response = self._client.chat.completions.create(**kwargs)
             except APIStatusError as exc:
                 last_error = exc
                 if exc.status_code in (429, 500, 502, 503):
-                    self._backoff(attempt)
+                    self._backoff(attempt, exc)
                     continue
                 raise LlmError(f"provider error {exc.status_code}: {exc.message}") from exc
             except APIError as exc:
@@ -108,9 +113,19 @@ class LlmClient:
             )
         raise LlmError(f"provider unavailable after {self.max_retries} attempts: {last_error}")
 
-    def _backoff(self, attempt: int) -> None:
-        if attempt < self.max_retries - 1:  # no pointless sleep after the final attempt
-            time.sleep(2.0 * (attempt + 1))
+    def _backoff(self, attempt: int, exc: APIError | None = None) -> None:
+        if attempt >= self.max_retries - 1:  # no pointless sleep after the final attempt
+            return
+        wait = 2.0 * (attempt + 1)
+        # Honor a server-provided Retry-After (free-tier rate limits tell us
+        # exactly how long to wait, e.g. "try again in 8.48s").
+        retry_after = getattr(getattr(exc, "response", None), "headers", None)
+        if retry_after is not None:
+            hint = retry_after.get("retry-after")
+            if hint:
+                with contextlib.suppress(ValueError):
+                    wait = max(wait, float(hint) + 1.0)
+        time.sleep(wait)
 
 
 def load_dotenv(path: Path) -> None:
@@ -128,7 +143,20 @@ def load_dotenv(path: Path) -> None:
 
 def client_from_env(model: str | None = None) -> LlmClient:
     load_dotenv(Path(".env"))
-    api_key = os.environ.get("GROQ_API_KEY", "")
+    # Provider seam: base URL, key, and model are all env-overridable, so
+    # switching providers (Groq <-> Anthropic <-> OpenAI) is config, not code.
+    api_key = os.environ.get("HANDS_API_KEY") or os.environ.get("GROQ_API_KEY", "")
     if not api_key:
-        raise LlmError("GROQ_API_KEY is not set (put it in .env or the environment)")
-    return LlmClient(api_key=api_key, model=model or os.environ.get("HANDS_MODEL", DEFAULT_MODEL))
+        raise LlmError(
+            "no API key set (HANDS_API_KEY or GROQ_API_KEY, in .env or the environment)"
+        )
+    base_url = os.environ.get("HANDS_BASE_URL", DEFAULT_BASE_URL)
+    chosen = model or os.environ.get("HANDS_MODEL", DEFAULT_MODEL)
+    # Claude models reject the temperature parameter; omit it for them.
+    temperature = None if chosen.startswith("claude") else 0.0
+    return LlmClient(
+        api_key=api_key,
+        base_url=base_url,
+        model=chosen,
+        temperature=temperature,
+    )

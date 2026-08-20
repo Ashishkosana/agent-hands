@@ -15,6 +15,7 @@ from playwright.sync_api import Locator
 from hands.artifact import (
     Capability,
     Condition,
+    OptionSelected,
     PostCondition,
     RegionTextMatch,
     RegionTextMatchesParam,
@@ -33,7 +34,7 @@ from hands.surface import (
     SurfaceError,
     WebSurface,
 )
-from hands.values import param_value_matches, value_bound_in
+from hands.values import param_value_matches, resolve_text, value_bound_in
 
 
 @dataclass
@@ -54,6 +55,8 @@ def describe_state(cond: StateCondition | PostCondition) -> str:
         return f"url matching /{cond.pattern}/"
     if isinstance(cond, RegionTextMatchesParam):
         return f"region {cond.region!r} showing the {cond.param!r} value"
+    if isinstance(cond, OptionSelected):
+        return f"dropdown option matching {cond.option!r} (match={cond.match})"
     return f"target value matches {cond.param!r} (normalize={cond.normalize})"
 
 
@@ -103,6 +106,21 @@ def post_holds(
         except (PlaywrightError, SurfaceError):
             return False
         return param_value_matches(params[cond.param], observed, cond.normalize)
+    if isinstance(cond, OptionSelected):
+        if target is None:
+            return False
+        try:
+            selected = target.locator.evaluate(
+                "el => el.selectedOptions && el.selectedOptions[0]"
+                " ? el.selectedOptions[0].label : ''"
+            )
+        except (PlaywrightError, SurfaceError):
+            return False
+        wanted = resolve_text(cond.option, params)
+        selected = str(selected)
+        if cond.match == "label":
+            return selected.strip() == wanted.strip()
+        return wanted in selected
     return state_holds(surface, cond, capability, params)
 
 

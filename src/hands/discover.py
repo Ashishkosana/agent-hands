@@ -174,6 +174,14 @@ def discover(
     headed: bool = False,
 ) -> DiscoveryReport:
     goal = request.goal_template
+    if request.outputs:
+        _names = ", ".join(repr(n) for n in request.outputs)
+        goal += (
+            f"\n\nWhen you reach the goal state, the done call MUST report each of these "
+            f"requested outputs using its EXACT name: {_names}. For each output, set "
+            f"anchor_text to the nearest stable label text next to the value on the page "
+            f"(never the value itself)."
+        )
     outcome_desc = {code: o.description for code, o in request.outcomes.items()}
 
     # ---- happy run: steps + checkpoint + outputs

@@ -123,3 +123,13 @@ hands replay capabilities/generated/meridian_member_balance.json \
   --param operator_id=teller1 --param password=password --param member_number=100234
 hands explain <run_id>        # the audit receipt
 ```
+
+## Screenshots
+
+**Unified console — chatbot (left) + live run dashboard (right):**
+
+![console](screenshots/console.png)
+
+**Dashboard — capability catalog, run history, status, evidence, contract drift:**
+
+![dashboard](screenshots/dashboard.png)

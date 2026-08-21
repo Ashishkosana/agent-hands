@@ -59,7 +59,7 @@ can drive it and a reviewer can watch it. Full write-up:
   audit receipt proving what ran, who approved it, and that no model was in
   the loop.
 
-![The MERIDIAN console — chatbot + live trust dashboard](docs/screenshots/console.png)
+![The MERIDIAN console — chatbot + live trust dashboard](docs/screenshots/meridian-console.png)
 
 ![The Fairview Teller Console fixture](docs/fixture-screenshot.png)
 

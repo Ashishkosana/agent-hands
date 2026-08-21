@@ -162,8 +162,8 @@ hands explain <run_id>        # the audit receipt
 
 **Unified console — chatbot (left) + live run dashboard (right):**
 
-![console](screenshots/console.png)
+![console](screenshots/meridian-console.png)
 
 **Dashboard — capability catalog, run history, status, evidence, contract drift:**
 
-![dashboard](screenshots/dashboard.png)
+![dashboard](screenshots/trust-dashboard.png)

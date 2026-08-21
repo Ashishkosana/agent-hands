@@ -32,6 +32,35 @@ states, each classified correctly; 10/10 replay stability; discovery cost
 ~3.5k tokens once vs **0 tokens** per replay. Evidence of real runs (including
 the genuine LLM-driven discovery) is in [/evidence/](evidence/README.md).
 
+## ⭐ The MERIDIAN CORE adaptation (the live build)
+
+The core has been adapted to a hosted legacy credit-union console —
+**MERIDIAN CORE** (`web-sample.interface-hiring.com`) — and wrapped so an agent
+can drive it and a reviewer can watch it. Full write-up:
+[docs/ADAPTATION.md](docs/ADAPTATION.md).
+
+- **All 7 target functions live**: sign-on/session, member lookup (number +
+  surname), account inquiry/balance, funds transfer (review → post),
+  new-share origination, contact maintenance, and the supervisor-gated
+  account hold — every artifact signed and live-verified, including the clean
+  business outcomes (`MEMBER_NOT_FOUND`, `VALIDATION_REJECTED`,
+  `SUPERVISOR_REQUIRED`) and a live escalation with TTL fail-safe.
+- **Capability API** (`hands.api`, :8100) — invoke by name with typed args →
+  a 5-way structured result + the contract hash; credentials from the
+  environment, idempotency keys, currency input sanitizing.
+- **Trust Dashboard** (`dashboard/`, :8200) — a plain-language, read-only view
+  over the tamper-evident audit logs: per-run "No AI used ✓ · Approved by ✓ ·
+  Recipe unchanged ✓ · Log tamper-evident ✓" chips, step-timing benchmarks,
+  and evidence.
+- **Chatbot console** (`chatbot/`, :8300) — plain English in, structured
+  replay under the hood, live dashboard alongside.
+- **Audit controls** — hash-chained traces (`verify_chain`), maker-checker
+  four-eyes on risk sign-off, and `hands explain <run_id>` — an examiner-grade
+  audit receipt proving what ran, who approved it, and that no model was in
+  the loop.
+
+![The MERIDIAN console — chatbot + live trust dashboard](docs/screenshots/console.png)
+
 ![The Fairview Teller Console fixture](docs/fixture-screenshot.png)
 
 ## Setup

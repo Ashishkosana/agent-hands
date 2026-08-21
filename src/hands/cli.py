@@ -123,6 +123,12 @@ def _review(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
         f"signed by {args.operator!r}: {len(risky)} risky step(s) {risky}, "
         f"hash {signed.risk_review.artifact_hash[:16] if signed.risk_review.artifact_hash else ''}…"
     )
+    if risky and capability.recorded_by is None:
+        print(
+            "note: maker unknown (no recorded_by; set HANDS_OPERATOR at discovery) — "
+            "the four-eyes check cannot bind on this artifact",
+            file=sys.stderr,
+        )
     return 0
 
 
@@ -133,7 +139,7 @@ def _explain(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     from files replay already writes — model-free."""
     import hashlib
 
-    from hands.artifact import dump_capability, risk_review_valid
+    from hands.artifact import dump_capability, risk_review_valid, same_operator
     from hands.trace import is_chained, verify_chain
 
     run_dir = args.runs_dir / args.run_id
@@ -181,13 +187,14 @@ def _explain(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
             )
             maker = cap.recorded_by or "(not recorded)"
             checker = rv.reviewed_by or "(unsigned)"
-            distinct = (
-                "distinct ok (four-eyes)"
-                if cap.recorded_by and rv.reviewed_by and cap.recorded_by != rv.reviewed_by
-                else "maker unknown -- four-eyes not bindable"
-                if not cap.recorded_by
-                else "unsigned"
-            )
+            if same_operator(cap.recorded_by, rv.reviewed_by):
+                distinct = "SELF-APPROVED -- four-eyes VIOLATED"
+            elif not rv.reviewed_by:
+                distinct = "unsigned"
+            elif not cap.recorded_by:
+                distinct = "maker unknown -- four-eyes not bindable"
+            else:
+                distinct = "distinct ok (four-eyes)"
             maker_checker = f"recorded by {maker!r} / approved by {checker!r} ({distinct})"
         except (OSError, ValueError):
             pass

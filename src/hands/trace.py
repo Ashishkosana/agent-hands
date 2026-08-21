@@ -3,14 +3,17 @@
 One directory per run under runs/: trace.jsonl plus any evidence files
 (screenshot, accessibility snapshot) captured on failure.
 
-Tamper evidence: records form a hash chain. Every record carries a 0-based
-``seq`` and ``prev`` — the SHA-256 of the previous record exactly as persisted
-(the serialized line, without its newline; ``""`` for the first record).
-Editing, removing, inserting, or reordering any record breaks the chain, which
-``verify_chain`` detects by recomputation. Known limit (documented, not
-hidden): truncating the *tail* of the log is only detectable against an
-external anchor (e.g. the final record's hash stored elsewhere) — chaining
-alone cannot prove a log didn't simply end early.
+Tamper EVIDENCE (not tamper proof): records form a hash chain. Every record
+carries a 0-based ``seq`` and ``prev`` — the SHA-256 of the previous record
+exactly as persisted (the serialized line, without its newline; ``""`` for the
+first record). Any naive edit, removal, insertion, or reordering breaks the
+chain, which ``verify_chain`` detects by recomputation. Known limits
+(documented, not hidden): the chain is keyless, so an adversary who can
+rewrite the whole file can recompute every hash and forge an intact-looking
+log; and truncating the *tail* is undetectable without an external anchor.
+Both need the same production mitigation — anchor the final record's hash
+outside the run directory (it already travels in the invoke envelope /
+receipt) or key the chain (HMAC) with a secret the writer holds.
 """
 
 from __future__ import annotations

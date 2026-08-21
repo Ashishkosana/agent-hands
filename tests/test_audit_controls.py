@@ -14,13 +14,15 @@ from pathlib import Path
 import pytest
 
 from hands.artifact import (
+    RiskReview,
     load_capability,
     risk_review_valid,
     sign_risk_review,
 )
 from hands.trace import Trace, is_chained, verify_chain
 
-ARTIFACT = Path(__file__).resolve().parent.parent / "capabilities" / "lookup_member_balance.json"
+REPO = Path(__file__).resolve().parent.parent
+ARTIFACT = REPO / "capabilities" / "lookup_member_balance.json"
 
 
 def _write_run(tmp_path: Path) -> Path:
@@ -103,3 +105,41 @@ class TestMakerChecker:
         signed = sign_risk_review(capability, "bob")
         laundered = signed.model_copy(update={"recorded_by": "someone_else"})
         assert not risk_review_valid(laundered)  # authorship is inside the signed content
+
+    def test_rewriting_the_checker_after_signing_voids_the_signature(self) -> None:
+        # The checker's identity is bound into the hash: keeping the stored
+        # hash but swapping who "approved" must invalidate the review.
+        capability = load_capability(ARTIFACT).model_copy(update={"recorded_by": "alice"})
+        signed = sign_risk_review(capability, "bob")
+        forged = signed.model_copy(
+            update={
+                "risk_review": RiskReview(
+                    reviewed_by="mallory", artifact_hash=signed.risk_review.artifact_hash
+                )
+            }
+        )
+        assert not risk_review_valid(forged)
+
+    def test_identity_variants_do_not_bypass_four_eyes(self) -> None:
+        capability = load_capability(ARTIFACT).model_copy(update={"recorded_by": "Alice"})
+        with pytest.raises(ValueError, match="maker-checker"):
+            sign_risk_review(capability, "alice")  # case variant
+        with pytest.raises(ValueError, match="maker-checker"):
+            sign_risk_review(capability, " Alice ")  # whitespace variant
+
+
+def test_every_committed_signed_artifact_validates() -> None:
+    """Schema evolution changes the canonical serialization and voids prior
+    signatures — that is the hash binding working. This test makes a missed
+    re-review impossible to ship: any committed artifact that claims a signer
+    must actually validate."""
+    paths = sorted((REPO / "capabilities").rglob("*.json"))
+    checked = 0
+    for path in paths:
+        if "request" in path.name:
+            continue
+        capability = load_capability(path)
+        if capability.risk_review.reviewed_by is not None:
+            assert risk_review_valid(capability), f"stale signature in {path.name}"
+            checked += 1
+    assert checked >= 1  # the suite must actually be exercising signed artifacts

@@ -537,33 +537,52 @@ class Capability(_Model):
         return self
 
 
-def risk_hash(capability: Capability) -> str:
-    """Hash of the artifact CONTENT a risk review signs — everything except
-    the signature block itself. Any change to steps, ladders, or contract
-    invalidates prior approval; re-recording requires re-review."""
+def same_operator(a: str | None, b: str | None) -> bool:
+    """Identity comparison for the four-eyes control: 'Alice' and 'alice '
+    are the same person, not a bypass."""
+    if a is None or b is None:
+        return False
+    return a.strip().casefold() == b.strip().casefold()
+
+
+def risk_hash(capability: Capability, reviewed_by: str | None = None) -> str:
+    """Hash of the content a risk review signs: the whole artifact (maker
+    identity included) PLUS the checker's identity, with only the hash slot
+    itself blanked. Binding ``reviewed_by`` into the hash means neither the
+    steps, the recorded author, nor the approver's name can be rewritten after
+    signing without voiding the review. Honest limit: identities here are
+    attestations recorded in a reviewed history, not cryptographic signatures
+    — per-operator keys are the production next step."""
     import hashlib
 
-    unsigned = capability.model_copy(update={"risk_review": RiskReview()})
+    unsigned = capability.model_copy(
+        update={"risk_review": RiskReview(reviewed_by=reviewed_by)}
+    )
     return hashlib.sha256(dump_capability(unsigned).encode()).hexdigest()
 
 
 def sign_risk_review(capability: Capability, reviewed_by: str) -> Capability:
     """Sign the risk labels. Maker-checker (four-eyes): when the capability
     records its author, that author may not approve their own risky steps —
-    the reviewer must be a different named operator. When authorship was not
-    recorded (legacy artifacts), the control cannot bind and signing proceeds."""
-    if capability.recorded_by is not None and reviewed_by == capability.recorded_by:
+    the reviewer must be a DIFFERENT named operator (case/whitespace variants
+    of the same name do not count as different). When authorship was not
+    recorded, the control cannot bind and signing proceeds."""
+    if same_operator(reviewed_by, capability.recorded_by):
         raise ValueError(
             f"maker-checker violation: {reviewed_by!r} recorded this capability and "
             "cannot approve their own risky steps; a different operator must review it"
         )
-    review = RiskReview(reviewed_by=reviewed_by, artifact_hash=risk_hash(capability))
+    review = RiskReview(
+        reviewed_by=reviewed_by, artifact_hash=risk_hash(capability, reviewed_by)
+    )
     return capability.model_copy(update={"risk_review": review})
 
 
 def risk_review_valid(capability: Capability) -> bool:
     review = capability.risk_review
-    return review.reviewed_by is not None and review.artifact_hash == risk_hash(capability)
+    return review.reviewed_by is not None and review.artifact_hash == risk_hash(
+        capability, review.reviewed_by
+    )
 
 
 def load_capability(path: Path) -> Capability:

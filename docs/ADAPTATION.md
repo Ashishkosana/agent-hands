@@ -82,12 +82,20 @@ snapshot rather than recover — see Cuts.
 
 The API/chatbot/dashboard sit **above** the engine, never around it: replay still
 enforces the network allowlist, mutating-by-default risk + hash-bound signed
-review, secret masking, and the escalation state machine. The dashboard imports
-only `hands.artifact` (read-only, import-purity verified) and reads the
-already-masked traces. `hands explain <run_id>` reconstructs any run into an
-examiner-grade **audit receipt**: capability + version + contract hash, who signed
-(bound to the hash), the full decision trace, the count of model events (0 →
-provably no model in the loop), the typed result, and evidence.
+review, secret masking, and the escalation state machine. Two audit-hardening
+controls sit on top: the trace is a **tamper-evident hash chain** (any naive
+edit/removal/reorder of a record is detected by recomputation; keyless-rewrite
+and tail-truncation limits are documented, with external anchoring as the
+production next step), and risk sign-off is **maker-checker** — discovery
+stamps the recording operator from `HANDS_OPERATOR`, that identity and the
+reviewer's are both bound into the signed hash, and the author of a risky flow
+cannot approve their own steps. The dashboard imports only model-free leaf
+modules (`hands.artifact`, `hands.trace`; read-only, import-purity verified)
+and reads the already-masked traces. `hands explain <run_id>` reconstructs any
+run into an examiner-grade **audit receipt**: capability + version + contract
+hash, maker/checker identities, the chain verdict (intact / BROKEN), the full
+decision trace, the count of model events (0 → provably no model in the loop),
+the typed result, and evidence.
 
 ## Demo surface
 

@@ -299,11 +299,14 @@ _TRUST_CHIPS = """
   {% if r.kind == 'replay' %}
     {% if r.model_events == 0 %}<span class="chip ok">No AI used ✓</span>
     {% else %}<span class="chip warn">AI events: {{r.model_events}}</span>{% endif %}
-    {% if r.approved_by %}<span class="chip ok">Approved by {{r.approved_by}} ✓</span>
-    {% else %}<span class="chip warn">Not approved</span>{% endif %}
-    {% if r.drift == 'current' %}<span class="chip ok">Recipe unchanged ✓</span>
-    {% elif r.drift == 'drifted' %}<span class="chip warn">Recipe changed since ⚠</span>{% endif %}
-    {% if r.log_state == 'intact' %}<span class="chip ok">Log tamper-proof ✓</span>
+    {% if r.drift == 'current' %}
+      {% if r.approved_by %}<span class="chip ok">Approved by {{r.approved_by}} ✓</span>
+      {% else %}<span class="chip warn">Not approved</span>{% endif %}
+      <span class="chip ok">Recipe unchanged ✓</span>
+    {% elif r.drift == 'drifted' %}
+      <span class="chip warn">Recipe changed since — approval unknown for this version ⚠</span>
+    {% endif %}
+    {% if r.log_state == 'intact' %}<span class="chip ok">Log tamper-evident ✓</span>
     {% elif r.log_state == 'broken' %}<span class="chip risk">Log MODIFIED ⚠</span>{% endif %}
   {% else %}
     <span class="chip warn">AI used here (learning run)</span>
@@ -313,7 +316,7 @@ _TRUST_CHIPS = """
 
 _INDEX = _CSS + """
 <h1>Trust Dashboard</h1>
-<div class="muted">every automated run on the banking system — what happened, whether AI was involved, who approved it, and proof nothing was tampered with</div>
+<div class="muted">every automated run on the banking system — what happened, whether AI was involved, who approved it, and whether the record has stayed intact (tamper-evident)</div>
 
 <div class="cards">
   <div class="stat"><div class="n">{{cards.runs_today}} <span class="muted">/ {{cards.runs_total}}</span></div><div class="l">runs today / total</div></div>
@@ -330,7 +333,8 @@ _INDEX = _CSS + """
     <div class="muted">{{c.description}}</div>
     <div style="margin-top:8px">
       {% if c.signed %}<span class="pill ok">approved by {{c.signed_by}} ✓</span>{% else %}<span class="pill warn">awaiting approval</span>{% endif %}
-      {% if c.recorded_by %}<span class="pill">recorded by {{c.recorded_by}}</span>{% endif %}
+      {% if c.recorded_by %}<span class="pill">recorded by {{c.recorded_by}}</span>
+      {% elif c.signed %}<span class="pill warn">maker not recorded — four-eyes not verifiable</span>{% endif %}
       {% if c.risky_steps %}<span class="pill risk">moves money / irreversible</span>{% endif %}
     </div>
     <div style="margin-top:6px">
@@ -362,7 +366,7 @@ _INDEX = _CSS + """
  <b>Clean answer</b> — a real-world answer like “no such member” (not an error) &nbsp;·&nbsp;
  <b>Stopped safely</b> — something was off, so it stopped without acting wrongly and saved evidence &nbsp;·&nbsp;
  <b>Blocked</b> — a safety rule refused the run &nbsp;·&nbsp;
- <b>No AI used ✓</b> — zero model calls in this run, counted from the tamper-proof log
+ <b>No AI used ✓</b> — zero model calls in this run, counted from the tamper-evident log
 </div>
 """
 

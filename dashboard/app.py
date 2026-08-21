@@ -27,15 +27,16 @@ from hands.artifact import dump_capability, load_capability, risk_review_valid
 from hands.trace import is_chained, verify_chain
 
 # Plain-word badges: every status a non-engineer understands on sight.
+# (label, text color, soft background) — the light-fintech badge idiom.
 _PLAIN_STATUS = {
-    "success": ("Completed", "#3fb950"),
-    "business_outcome": ("Clean answer", "#58a6ff"),
-    "failure": ("Stopped safely", "#f85149"),
-    "precondition_failed": ("Not ready", "#d29922"),
-    "policy_violation": ("Blocked", "#d29922"),
-    "recorded": ("Recipe recorded", "#3fb950"),
-    "failed": ("Recording failed", "#f85149"),
-    "unknown": ("Unknown", "#8b949e"),
+    "success": ("Completed", "#067647", "#ecfdf3"),
+    "business_outcome": ("Clean answer", "#175cd3", "#eff8ff"),
+    "failure": ("Stopped safely", "#b42318", "#fef3f2"),
+    "precondition_failed": ("Not ready", "#b54708", "#fffaeb"),
+    "policy_violation": ("Blocked", "#b54708", "#fffaeb"),
+    "recorded": ("Recipe recorded", "#067647", "#ecfdf3"),
+    "failed": ("Recording failed", "#b42318", "#fef3f2"),
+    "unknown": ("Unknown", "#475467", "#f2f4f7"),
 }
 
 # Event names that would indicate a model was involved in a run.
@@ -176,7 +177,7 @@ def _summarize_run(run_dir: Path) -> dict[str, Any] | None:
         for p in run_dir.iterdir()
         if p.suffix in (".png", ".txt") and p.name != "trace.jsonl"
     ]
-    plain_status, color = _PLAIN_STATUS.get(status, _PLAIN_STATUS["unknown"])
+    plain_status, color, badge_bg = _PLAIN_STATUS.get(status, _PLAIN_STATUS["unknown"])
     return {
         "id": run_dir.name,
         "kind": kind,
@@ -186,6 +187,7 @@ def _summarize_run(run_dir: Path) -> dict[str, Any] | None:
         "status": status,
         "plain_status": plain_status,
         "color": color,
+        "badge_bg": badge_bg,
         "plain": _plain_sentence(kind, status, outputs, code),
         "code": code,
         "outputs": outputs,
@@ -217,6 +219,12 @@ def _catalog(gen_dir: Path, app: str | None = None) -> list[dict[str, Any]]:
             "outputs": list(cap.outputs),
             "outcomes": list(cap.outcomes),
             "risky_steps": [s.id for s in cap.steps if s.risk == "risky"],
+            # Display heuristic only (the gate uses the real labels): flag the
+            # card as irreversible when risk goes beyond the sign-on POST.
+            "irreversible": [
+                s.id for s in cap.steps
+                if s.risk == "risky" and "sign on" not in s.intent.lower()
+            ],
             "signed": risk_review_valid(cap),
             "signed_by": cap.risk_review.reviewed_by,
             "recorded_by": cap.recorded_by,
@@ -302,31 +310,48 @@ def create_dashboard(
 
 _CSS = """
 <style>
- body{margin:0;background:#0d1117;color:#e6edf3;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:26px}
- h1{font-size:21px;margin:0 0 2px} h2{font-size:13px;color:#8b949e;margin:26px 0 10px;text-transform:uppercase;letter-spacing:.6px}
- a{color:#58a6ff;text-decoration:none} a:hover{text-decoration:underline}
- .muted{color:#8b949e;font-size:12.5px}
- .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:14px}
- .stat{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:14px 16px}
- .stat .n{font-size:24px;font-weight:700} .stat .l{color:#8b949e;font-size:12px;margin-top:2px}
- .good{color:#3fb950}
- .capgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
- .card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px}
- .card h3{margin:0 0 4px;font-size:15px}
- .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;margin:2px 4px 2px 0;background:#21262d;color:#c9d1d9}
- .ok{background:rgba(63,185,80,.15);color:#3fb950} .warn{background:rgba(210,153,34,.15);color:#d29922}
- .risk{background:rgba(248,81,73,.15);color:#f85149}
- table{width:100%;border-collapse:collapse;font-size:13px}
- th{text-align:left;color:#8b949e;font-weight:600;padding:8px;border-bottom:1px solid #30363d}
- td{padding:9px 8px;border-bottom:1px solid #21262d;vertical-align:top}
- .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11.5px;font-weight:600;color:#0d1117}
- .k{font-family:ui-monospace,monospace;font-size:12px;color:#8b949e}
- .chip{display:inline-block;font-size:11px;padding:1px 8px;border-radius:20px;margin:1px 3px 1px 0;white-space:nowrap}
- .legend{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:10px 14px;font-size:12.5px;color:#8b949e;margin-top:10px}
- .legend b{color:#c9d1d9;font-weight:600}
- .ev{border-left:2px solid #30363d;padding:4px 0 4px 14px;margin-left:6px}
- .evname{color:#58a6ff;font-family:ui-monospace,monospace}
- img{max-width:100%;border:1px solid #30363d;border-radius:8px}
+ :root{--ink:#101828;--muted:#475467;--faint:#98a2b3;--line:#eaecf0;--canvas:#f8fafc;
+       --card:#ffffff;--accent:#4f46e5;--accent-soft:#eef2ff;
+       --ok:#067647;--ok-bg:#ecfdf3;--warn:#b54708;--warn-bg:#fffaeb;--risk:#b42318;--risk-bg:#fef3f2;
+       --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.08)}
+ *{box-sizing:border-box}
+ body{margin:0;background:var(--canvas);color:var(--ink);
+      font:14px/1.55 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;padding:32px 36px}
+ h1{font-size:22px;font-weight:700;letter-spacing:-.02em;margin:0 0 2px}
+ h2{font-size:12px;color:var(--faint);margin:30px 0 12px;text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+ a{color:var(--accent);text-decoration:none;font-weight:500} a:hover{text-decoration:underline}
+ .muted{color:var(--muted);font-size:13px}
+ .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:18px}
+ .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+ .stat .n{font-size:26px;font-weight:700;letter-spacing:-.02em} .stat .l{color:var(--muted);font-size:12.5px;margin-top:3px}
+ .good{color:var(--ok)}
+ .capgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+ .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
+ .card h3{margin:0 0 4px;font-size:15px;font-weight:600}
+ .pill{display:inline-block;font-size:11.5px;font-weight:500;padding:2px 9px;border-radius:999px;margin:2px 4px 2px 0;
+       background:#f2f4f7;color:var(--muted);border:1px solid var(--line)}
+ .ok{background:var(--ok-bg);color:var(--ok);border-color:#abefc6}
+ .warn{background:var(--warn-bg);color:var(--warn);border-color:#fedf89}
+ .risk{background:var(--risk-bg);color:var(--risk);border-color:#fecdca}
+ table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px;background:var(--card);
+       border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}
+ th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;padding:11px 14px;
+    background:#f9fafb;border-bottom:1px solid var(--line)}
+ td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+ tr:last-child td{border-bottom:0}
+ .badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid transparent}
+ .k{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;color:var(--faint)}
+ .chip{display:inline-block;font-size:11.5px;font-weight:500;padding:1px 9px;border-radius:999px;margin:1px 3px 1px 0;
+       white-space:nowrap;background:#f2f4f7;color:var(--muted);border:1px solid var(--line)}
+ .legend{background:var(--accent-soft);border:1px solid #e0e7ff;border-radius:12px;padding:12px 16px;
+         font-size:12.5px;color:var(--muted);margin-top:14px}
+ .legend b{color:var(--ink);font-weight:600}
+ .ev{border-left:2px solid var(--line);padding:5px 0 5px 14px;margin-left:6px}
+ .evname{color:var(--accent);font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12.5px}
+ img{max-width:100%;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+ .brand{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+ .mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#4f46e5,#7c3aed);
+       display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px}
 </style>
 """
 
@@ -350,7 +375,7 @@ _TRUST_CHIPS = """
 """
 
 _INDEX = _CSS + """
-<h1>Trust Dashboard</h1>
+<div class="brand"><div class="mark">◆</div><h1>Trust Dashboard</h1></div>
 <div class="muted">every automated run on the banking system — what happened, whether AI was involved, who approved it, and whether the record has stayed intact (tamper-evident)</div>
 
 <div class="cards">
@@ -370,7 +395,7 @@ _INDEX = _CSS + """
       {% if c.signed %}<span class="pill ok">approved by {{c.signed_by}} ✓</span>{% else %}<span class="pill warn">awaiting approval</span>{% endif %}
       {% if c.recorded_by %}<span class="pill">recorded by {{c.recorded_by}}</span>
       {% elif c.signed %}<span class="pill warn">maker not recorded — four-eyes not verifiable</span>{% endif %}
-      {% if c.risky_steps %}<span class="pill risk">moves money / irreversible</span>{% endif %}
+      {% if c.irreversible %}<span class="pill risk">moves money / irreversible</span>{% endif %}
     </div>
     <div style="margin-top:6px">
       {% for p in c.params %}<span class="pill">needs: {{p.replace('_',' ')}}</span>{% endfor %}
@@ -388,7 +413,7 @@ _INDEX = _CSS + """
  <tr>
    <td class="k">{{r.when}}</td>
    <td>{{r.title}}<div class="muted">{{'learning run' if r.kind == 'discovery' else ''}}</div></td>
-   <td><span class="badge" style="background:{{r.color}}">{{r.plain_status}}</span>
+   <td><span class="badge" style="background:{{r.badge_bg}};color:{{r.color}}">{{r.plain_status}}</span>
        <div class="muted" style="margin-top:3px">{{r.plain}}</div></td>
    <td>""" + _TRUST_CHIPS + """</td>
    <td><a href="/run/{{r.id}}">details →</a></td>
@@ -411,7 +436,7 @@ _DETAIL = _CSS + """
 <h1>{{summary.title}}</h1>
 <div class="muted k">{{run_id}}</div>
 <div style="margin:10px 0 4px">
-  <span class="badge" style="background:{{summary.color}}">{{summary.plain_status}}</span>
+  <span class="badge" style="background:{{summary.badge_bg}};color:{{summary.color}}">{{summary.plain_status}}</span>
   <span class="muted" style="margin-left:8px">{{summary.plain}}</span>
 </div>
 <div style="margin:6px 0">{% set r = summary %}""" + _TRUST_CHIPS + """</div>
@@ -428,7 +453,7 @@ _DETAIL = _CSS + """
    <td class="k">{{t.step}}{% if t.risk == 'risky' %} <span class="pill risk">risky</span>{% endif %}</td>
    <td class="muted">{{t.intent}}</td>
    <td class="k">{{t.ms if t.ms is not none else '—'}}{{' ms' if t.ms is not none else ''}}</td>
-   <td><div style="height:8px;border-radius:4px;background:#1f6feb;width:{{t.bar}}%"></div></td>
+   <td><div style="height:8px;border-radius:4px;background:linear-gradient(90deg,#4f46e5,#7c3aed);width:{{t.bar}}%"></div></td>
  </tr>
 {% endfor %}
 </table>

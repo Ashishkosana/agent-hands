@@ -148,29 +148,43 @@ _DASH_URL = os.environ.get("HANDS_DASH_URL", "http://127.0.0.1:8200/")
 
 _CHAT_PAGE = """<!doctype html>
 <html><head><meta charset="utf-8"><title>MERIDIAN Console</title><style>
- body{margin:0;background:#0d1117;color:#e6edf3;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;height:100vh}
- #left{width:40%;min-width:360px;display:flex;flex-direction:column;border-right:1px solid #30363d}
+ :root{--ink:#101828;--muted:#475467;--line:#eaecf0;--canvas:#f8fafc;--card:#ffffff;
+       --accent:#4f46e5;--shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.08)}
+ *{box-sizing:border-box}
+ body{margin:0;background:var(--canvas);color:var(--ink);
+      font:15px/1.55 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;display:flex;height:100vh}
+ #left{width:40%;min-width:380px;display:flex;flex-direction:column;background:var(--card);
+       border-right:1px solid var(--line)}
  #right{flex:1;display:flex;flex-direction:column}
- #head{padding:16px 22px;border-bottom:1px solid #30363d;font-weight:600}
- #head small{color:#8b949e;font-weight:400;display:block;margin-top:2px}
- #log{flex:1;overflow:auto;padding:22px;display:flex;flex-direction:column;gap:12px}
- .m{max-width:80%;padding:10px 14px;border-radius:14px;white-space:pre-wrap}
- .you{align-self:flex-end;background:#1f6feb;color:#fff;border-bottom-right-radius:4px}
- .bot{align-self:flex-start;background:#161b22;border:1px solid #30363d;border-bottom-left-radius:4px}
- .think{color:#8b949e;font-style:italic}
- #bar{display:flex;gap:10px;padding:16px 22px;border-top:1px solid #30363d}
- #msg{flex:1;background:#0d1117;border:1px solid #30363d;border-radius:10px;color:#e6edf3;padding:11px 14px;font-size:15px}
- button{background:#238636;color:#fff;border:0;border-radius:10px;padding:0 20px;font-size:15px;cursor:pointer}
- .rhead{padding:12px 18px;border-bottom:1px solid #30363d;color:#8b949e;font-size:13px}
- iframe{flex:1;border:0;background:#0d1117}
+ #head{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center}
+ .mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#4f46e5,#7c3aed);
+       display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px;flex:none}
+ #head b{font-size:16px;letter-spacing:-.01em}
+ #head small{color:var(--muted);font-weight:400;display:block;margin-top:1px;font-size:12.5px}
+ #log{flex:1;overflow:auto;padding:24px;display:flex;flex-direction:column;gap:12px;background:#fcfcfd}
+ .m{max-width:82%;padding:11px 15px;border-radius:16px;white-space:pre-wrap;font-size:14.5px;box-shadow:var(--shadow)}
+ .you{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:5px}
+ .bot{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-bottom-left-radius:5px}
+ .think{color:var(--muted);font-style:italic;box-shadow:none;background:transparent;border:0}
+ #bar{display:flex;gap:10px;padding:16px 24px;border-top:1px solid var(--line);background:var(--card)}
+ #msg{flex:1;background:var(--card);border:1px solid #d0d5dd;border-radius:12px;color:var(--ink);
+      padding:12px 15px;font-size:14.5px;outline:none;box-shadow:var(--shadow)}
+ #msg:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(79,70,229,.12)}
+ button{background:var(--accent);color:#fff;border:0;border-radius:12px;padding:0 22px;font-size:14.5px;
+        font-weight:600;cursor:pointer;box-shadow:var(--shadow)}
+ button:hover{background:#4338ca}
+ .rhead{padding:13px 20px;border-bottom:1px solid var(--line);color:var(--muted);font-size:13px;background:var(--card)}
+ iframe{flex:1;border:0;background:var(--canvas)}
 </style></head><body>
  <div id="left">
-   <div id="head">MERIDIAN Assistant<small>ask in plain English — e.g. "check the balance for member 100234"</small></div>
+   <div id="head"><div class="mark">◆</div>
+     <div><b>MERIDIAN Assistant</b><small>ask in plain English — e.g. "check the balance for member 100234"</small></div>
+   </div>
    <div id="log"></div>
    <div id="bar"><input id="msg" placeholder="type a request…" autofocus><button onclick="send()">Send</button></div>
  </div>
  <div id="right">
-   <div class="rhead">📊 Live runs &amp; evidence — every request you make appears here</div>
+   <div class="rhead">Live runs &amp; evidence — every request you make appears here</div>
    <iframe id="dash" src="__DASH__"></iframe>
  </div>
 <script>

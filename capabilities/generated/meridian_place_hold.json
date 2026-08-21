@@ -449,6 +449,12 @@
           "role": "heading",
           "name": "MEMBER RECORD",
           "context": []
+        },
+        {
+          "kind": "role_name_visible",
+          "role": "link",
+          "name": "Place Account Hold",
+          "context": []
         }
       ],
       "risk": "safe"
@@ -741,6 +747,6 @@
   "recorded_by": null,
   "risk_review": {
     "reviewed_by": "ashish",
-    "artifact_hash": "792166d7a6be3f1acf685b81a688b46c6ee5a5aedbe0b0cfdb87ffa3cb3d32fd"
+    "artifact_hash": "671bd54b463afb070faebc5bd069addb1b09fa7a1ea4f39900c2fbb29012ccfd"
   }
 }

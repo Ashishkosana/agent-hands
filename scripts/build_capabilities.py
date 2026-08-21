@@ -86,6 +86,17 @@ def session_heal(entry_url: str) -> dict[str, Any]:
     }
 
 
+def prefix_until_link(action_link: str) -> list[dict[str, Any]]:
+    """The discovered prefix, with s7's postcondition strengthened to require
+    the target ACTIONS link: on a large member record the page streams, so the
+    MEMBER RECORD heading can be visible before the action links exist. The
+    step is only 'done' when the link this capability needs has rendered."""
+    steps = json.loads(json.dumps(PREFIX))  # deep copy
+    steps[6]["post"].append({"kind": "role_name_visible", "role": "link",
+                             "name": action_link, "context": []})
+    return steps
+
+
 def type_step(id_: str, intent: str, label: str, param: str, *, risky: bool = False,
               post: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     return {
@@ -239,7 +250,7 @@ ARTIFACTS["meridian_open_new_share"] = capability(
                 "initial_deposit": {"type": "string", "description": "Initial deposit in dollars",
                                     "sensitive": False, "example": "10",
                                     "pattern": "[0-9]+(\\.[0-9]{1,2})?"}},
-    steps=[*PREFIX,
+    steps=[*prefix_until_link("Open New Share"),
         click_step("s8", "Open the New Share form", "Open New Share", "link",
                    "OPEN NEW SHARE"),
         select_step("s9", "Choose the share type", "Share Type:", "{param:share_type}"),
@@ -299,7 +310,7 @@ ARTIFACTS["meridian_update_contact"] = capability(
                 "address": {"type": "string", "description": "New mailing address",
                             "sensitive": False, "example": "1 Main St, Springfield",
                             "pattern": None}},
-    steps=[*PREFIX,
+    steps=[*prefix_until_link("Update Member Information"),
         click_step("s8", "Open the Update Member Information form",
                    "Update Member Information", "link", "UPDATE MEMBER INFORMATION"),
         type_step("s9", "Enter the new e-mail", "E-mail:", "email"),
@@ -345,7 +356,7 @@ ARTIFACTS["meridian_place_hold"] = capability(
                 "notes": {"type": "string", "description": "Hold notes",
                           "sensitive": False, "example": "requested by member",
                           "pattern": None}},
-    steps=[*PREFIX,
+    steps=[*prefix_until_link("Place Account Hold"),
         click_step("s8", "Open the Place Account Hold form", "Place Account Hold",
                    "link", "PLACE ACCOUNT HOLD"),
         select_step("s9", "Choose the share to hold", "Share:", "{param:share}"),

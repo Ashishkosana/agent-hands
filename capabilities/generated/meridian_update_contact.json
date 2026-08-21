@@ -388,6 +388,12 @@
           "role": "heading",
           "name": "MEMBER RECORD",
           "context": []
+        },
+        {
+          "kind": "role_name_visible",
+          "role": "link",
+          "name": "Update Member Information",
+          "context": []
         }
       ],
       "risk": "safe"
@@ -613,6 +619,6 @@
   "recorded_by": null,
   "risk_review": {
     "reviewed_by": "ashish",
-    "artifact_hash": "0887780e25f300c3c4274021aafe58d6f06678ecf2e29155b24de2803d3c49dc"
+    "artifact_hash": "24893529278646b3f0a7f8623064f23f532f77fb9518e88681b13df4ecd7285b"
   }
 }

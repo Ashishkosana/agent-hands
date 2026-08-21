@@ -35,20 +35,43 @@ core change.
   Retry-After-aware backoff. Discovery ran on both Groq and Anthropic with no code
   change — the seam the design always claimed.
 
-## Capabilities
+## Capabilities — the full 7-function registry, all live-verified
 
-- **`meridian_member_balance`** (must-have #1): sign on → member inquiry → search →
-  select → read the checking balance. **Discovered.** Handles **MEMBER_NOT_FOUND**
-  as a live-verified business outcome (a second discovery run against a nonexistent
-  member; `provenance="discovered"`). A correctness fix: the Search step's
-  postcondition was changed to a happy-only marker (the `Select` link) so the
-  not-found recognizer isn't preempted — otherwise a not-found lookup would
-  conflate into a FAILURE instead of the clean outcome.
-- **`meridian_funds_transfer`** (must-have #2): sign on → member → Funds Transfer →
-  `select` from/to share → amount → review → **post (risky)**. **Hand-authored**
-  (Path B) reusing the discovered login+lookup prefix; moves real funds and returns
-  the confirmation number. Deliberate cut, documented: discovery is already proven
-  on the balance capability, so I spent the budget on the wrapper + safety.
+Adding five more functions took **zero engine changes**: `scripts/build_capabilities.py`
+authors them through the schema, reusing the discovered login+lookup prefix. Every
+wrong guessed anchor was corrected from the engine's own failure snapshots —
+fail-loud doubled as reconnaissance.
+
+| Function | Artifact | Live result |
+|---|---|---|
+| Session management | `meridian_sign_on` | success (menu checkpoint; unbound-checkpoint justified) |
+| Member lookup (number) | embedded in every capability | — |
+| Member lookup (surname) | `meridian_member_lookup_by_name` | "Lovelace" → 100234 via the Search-by dropdown |
+| Balance / account inquiry | `meridian_member_balance` (**discovered**) + `meridian_account_inquiry` (multi-output) | success; MEMBER_NOT_FOUND clean |
+| Funds transfer | `meridian_funds_transfer` | success CN…; **VALIDATION_REJECTED** live (source share on hold) |
+| New share origination | `meridian_open_new_share` | success CN…; **VALIDATION_REJECTED** live ($1 < $5 minimum) |
+| Contact maintenance | `meridian_update_contact` | success (identity-bound confirmation page) |
+| Account hold | `meridian_place_hold` | **teller1 → SUPERVISOR_REQUIRED** (clean outcome + evidence); **super1 → success** CN… |
+
+Notable mechanics, all config: the review pages of transfer and hold **cross-verify
+the member** (`region_text_matches_param`) before the irreversible click; a
+**session-heal recoverable** (sign-on heading reappearing after login → navigate +
+`restart_from s1`) is wired on the inquiry capability — armed *after* login, because
+arming at the login step itself made recovery loop into its own fire-cap (caught
+live; the cap promoted it to FAILURE exactly as designed); the record page streams
+on large members, so the prefix's last step also requires the target ACTIONS link
+to be visible before proceeding (a race the loud-failure evidence diagnosed).
+
+**Escalation, demonstrated live:** an ambiguous share ("Money Market", 11 matching
+options) under `--attended` paused the run and raised an intervention carrying the
+step, the exact ambiguity, masked params, remaining steps, and the recent
+hash-chained events; with no operator answer inside the TTL the session closed and
+the run failed safe — an unanswered intervention never acts alone.
+
+**API boundary guardrails:** an `idempotency_key` suppresses duplicate execution
+(a retried transfer returns the original envelope, executed exactly once — tested);
+a currency sanitizer normalizes unambiguous currency shapes ("$1,000.50" → 1000.50)
+for non-sensitive params only (tested, incl. that passwords are never rewritten).
 
 ## The API contract (§3.2)
 
@@ -108,16 +131,19 @@ the typed result, and evidence.
 
 ## Cuts (honest)
 
-- **Graceful fault recovery** — injected faults fail loud with evidence rather
-  than recover or classify by type; wiring each to a recovery/business outcome is
-  the top next step (the escalation machine already exists).
-- **INSUFFICIENT_FUNDS / PERMISSION_DENIED** outcomes and the supervisor-gated
-  **Place Hold** capability (which would drive the escalation demo) — not yet
-  wired.
-- **Open New Share / Update Member Info** — not built (thin, additive request files).
+- **Session-heal is authored, not yet eval-verified** — the recognizer and
+  recovery are wired (`provenance="authored"`, `verified_by_eval=false`, the
+  state the schema exists to express); a deterministic eval needs a controllable
+  mid-run session kill, which the shared sandbox's global fault switch can't
+  provide (it also kills the re-login).
+- **Injected 500/503 faults** still fail loud with evidence rather than
+  classify by fault type; validation and permission are now clean outcomes.
 - **Multi-tenant overlays** — designed; the `HANDS_APP` catalog scoping + rung
   telemetry + drift eval are the built foundation; the overlay loader + a second
   live skin are next.
+- **Identity is attestation, not cryptography** — maker/checker names are
+  recorded and hash-bound, but per-operator signing keys are a production next
+  step (documented in `risk_hash`).
 
 ## Run it
 

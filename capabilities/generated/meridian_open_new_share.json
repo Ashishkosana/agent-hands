@@ -426,6 +426,12 @@
           "role": "heading",
           "name": "MEMBER RECORD",
           "context": []
+        },
+        {
+          "kind": "role_name_visible",
+          "role": "link",
+          "name": "Open New Share",
+          "context": []
         }
       ],
       "risk": "safe"
@@ -672,6 +678,6 @@
   "recorded_by": null,
   "risk_review": {
     "reviewed_by": "ashish",
-    "artifact_hash": "9f0650507f00233a91c860d4249eadf50361304aeda4a48c4e4c80ed9802b2a4"
+    "artifact_hash": "e003d60a57ec823ac924618b7128ebf7080b3c3df05db1ce18bc31d218bd0fcb"
   }
 }

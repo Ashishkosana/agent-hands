@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "name": "meridian_funds_transfer",
+  "name": "meridian_open_new_share",
   "version": 1,
-  "description": "Sign on to MERIDIAN CORE, look up a member, and transfer funds between two of their shares (review then post).",
+  "description": "Sign on, open a member's record, and open a new share of the given type with an initial deposit (review, then post).",
   "target": {
     "app": "meridian-core",
     "entry": {
@@ -41,34 +41,31 @@
       "example": "100234",
       "pattern": "[0-9]{1,10}"
     },
-    "from_share": {
+    "share_type": {
       "type": "string",
-      "description": "Stable substring identifying the source share, e.g. 'Share Draft (Checking)'",
+      "description": "Stable substring of the share type option, e.g. 'Money Market'",
       "sensitive": false,
-      "example": "Share Draft (Checking)",
+      "example": "Money Market",
       "pattern": null
     },
-    "to_share": {
+    "initial_deposit": {
       "type": "string",
-      "description": "Stable substring identifying the destination share, e.g. 'S0001-3'",
+      "description": "Initial deposit in dollars",
       "sensitive": false,
-      "example": "S0001-3",
-      "pattern": null
-    },
-    "amount": {
-      "type": "string",
-      "description": "Dollar amount to transfer",
-      "sensitive": false,
-      "example": "1",
+      "example": "10",
       "pattern": "[0-9]+(\\.[0-9]{1,2})?"
     }
   },
-  "outcomes": {},
+  "outcomes": {
+    "VALIDATION_REJECTED": {
+      "description": "The core rejected the request (e.g. below the minimum opening deposit)."
+    }
+  },
   "outputs": {
     "confirmation_number": {
       "type": "string",
       "sensitive": false,
-      "region": "transfer_result",
+      "region": "identity",
       "from": {
         "ladder": [
           {
@@ -91,6 +88,22 @@
     }
   },
   "regions": {
+    "outcome_validation": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "anchor": {
+            "strategy": "text",
+            "text": "The request could not be validated:"
+          },
+          "container": "table"
+        }
+      ],
+      "context": [],
+      "fingerprint": null,
+      "fragile": false
+    },
     "identity": {
       "ladder": [
         {
@@ -99,38 +112,6 @@
           "anchor": {
             "strategy": "text",
             "text": "Confirmation:"
-          },
-          "container": "table"
-        }
-      ],
-      "context": [],
-      "fingerprint": null,
-      "fragile": false
-    },
-    "transfer_result": {
-      "ladder": [
-        {
-          "strategy": "relative",
-          "relation": "container_of",
-          "anchor": {
-            "strategy": "text",
-            "text": "Confirmation:"
-          },
-          "container": "table"
-        }
-      ],
-      "context": [],
-      "fingerprint": null,
-      "fragile": false
-    },
-    "confirm_member": {
-      "ladder": [
-        {
-          "strategy": "relative",
-          "relation": "container_of",
-          "anchor": {
-            "strategy": "text",
-            "text": "Member:"
           },
           "container": "table"
         }
@@ -451,7 +432,7 @@
     },
     {
       "id": "s8",
-      "intent": "Open Funds Transfer",
+      "intent": "Open the New Share form",
       "action": {
         "kind": "click"
       },
@@ -460,11 +441,11 @@
           {
             "strategy": "role",
             "role": "link",
-            "name": "Funds Transfer"
+            "name": "Open New Share"
           },
           {
             "strategy": "text",
-            "text": "Funds Transfer"
+            "text": "Open New Share"
           }
         ],
         "context": [],
@@ -483,7 +464,7 @@
         {
           "kind": "role_name_visible",
           "role": "heading",
-          "name": "FUNDS TRANSFER",
+          "name": "OPEN NEW SHARE",
           "context": []
         }
       ],
@@ -491,10 +472,10 @@
     },
     {
       "id": "s9",
-      "intent": "Choose the from-share",
+      "intent": "Choose the share type",
       "action": {
         "kind": "select",
-        "option": "{param:from_share}",
+        "option": "{param:share_type}",
         "match": "contains"
       },
       "target": {
@@ -504,13 +485,9 @@
             "relation": "nearest_input_right",
             "anchor": {
               "strategy": "text",
-              "text": "From Share:"
+              "text": "Share Type:"
             },
             "container": null
-          },
-          {
-            "strategy": "css",
-            "css": "select[name=\"from\"]"
           }
         ],
         "context": [],
@@ -528,7 +505,7 @@
       "post": [
         {
           "kind": "option_selected",
-          "option": "{param:from_share}",
+          "option": "{param:share_type}",
           "match": "contains"
         }
       ],
@@ -536,55 +513,10 @@
     },
     {
       "id": "s10",
-      "intent": "Choose the to-share",
-      "action": {
-        "kind": "select",
-        "option": "{param:to_share}",
-        "match": "contains"
-      },
-      "target": {
-        "ladder": [
-          {
-            "strategy": "relative",
-            "relation": "nearest_input_right",
-            "anchor": {
-              "strategy": "text",
-              "text": "To Share:"
-            },
-            "container": null
-          },
-          {
-            "strategy": "css",
-            "css": "select[name=\"to\"]"
-          }
-        ],
-        "context": [],
-        "fingerprint": {
-          "role": "combobox",
-          "editable": null
-        },
-        "fragile": false
-      },
-      "pre": [
-        {
-          "kind": "visible"
-        }
-      ],
-      "post": [
-        {
-          "kind": "option_selected",
-          "option": "{param:to_share}",
-          "match": "contains"
-        }
-      ],
-      "risk": "safe"
-    },
-    {
-      "id": "s11",
-      "intent": "Enter the amount",
+      "intent": "Enter the initial deposit",
       "action": {
         "kind": "type",
-        "text": "{param:amount}"
+        "text": "{param:initial_deposit}"
       },
       "target": {
         "ladder": [
@@ -593,13 +525,9 @@
             "relation": "nearest_input_right",
             "anchor": {
               "strategy": "text",
-              "text": "Amount:"
+              "text": "Initial Deposit:"
             },
             "container": null
-          },
-          {
-            "strategy": "css",
-            "css": "input[name=\"amount\"]"
           }
         ],
         "context": [],
@@ -617,14 +545,14 @@
       "post": [
         {
           "kind": "value_matches_param",
-          "param": "amount",
+          "param": "initial_deposit",
           "normalize": "none"
         }
       ],
       "risk": "safe"
     },
     {
-      "id": "s12",
+      "id": "s11",
       "intent": "Continue to the confirmation screen",
       "action": {
         "kind": "click"
@@ -657,20 +585,15 @@
         {
           "kind": "role_name_visible",
           "role": "heading",
-          "name": "CONFIRM FUNDS TRANSFER",
+          "name": "CONFIRM NEW SHARE",
           "context": []
-        },
-        {
-          "kind": "region_text_matches_param",
-          "region": "confirm_member",
-          "param": "member_number"
         }
       ],
       "risk": "safe"
     },
     {
-      "id": "s13",
-      "intent": "Post the transfer",
+      "id": "s12",
+      "intent": "Post the new share",
       "action": {
         "kind": "click"
       },
@@ -679,11 +602,11 @@
           {
             "strategy": "role",
             "role": "button",
-            "name": "Post Transfer"
+            "name": "Open Share"
           },
           {
             "strategy": "text",
-            "text": "Post Transfer"
+            "text": "Open Share"
           }
         ],
         "context": [],
@@ -702,20 +625,40 @@
         {
           "kind": "role_name_visible",
           "role": "heading",
-          "name": "TRANSFER POSTED",
+          "name": "SHARE OPENED",
           "context": []
         }
       ],
       "risk": "risky"
     }
   ],
-  "conditions": [],
+  "conditions": [
+    {
+      "id": "cond_validation_rejected",
+      "armed_after": "s11",
+      "match": {
+        "kind": "region_text",
+        "region": "outcome_validation",
+        "patterns": [
+          "The request could not be validated"
+        ]
+      },
+      "classify": "business_outcome",
+      "outcome_code": "VALIDATION_REJECTED",
+      "recovery": [],
+      "resume": null,
+      "restart_from": null,
+      "max_fires_per_run": 2,
+      "provenance": "authored",
+      "verified_by_eval": false
+    }
+  ],
   "checkpoint": {
     "all": [
       {
         "kind": "role_name_visible",
         "role": "heading",
-        "name": "TRANSFER POSTED",
+        "name": "SHARE OPENED",
         "context": []
       },
       {
@@ -729,6 +672,6 @@
   "recorded_by": null,
   "risk_review": {
     "reviewed_by": "ashish",
-    "artifact_hash": "c934640b3626982cafd606b3d3592b581eff829c78e7cafe9c8ffda814a69069"
+    "artifact_hash": "9f0650507f00233a91c860d4249eadf50361304aeda4a48c4e4c80ed9802b2a4"
   }
 }

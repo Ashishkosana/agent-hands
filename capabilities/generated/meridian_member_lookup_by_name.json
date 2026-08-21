@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "name": "meridian_funds_transfer",
+  "name": "meridian_member_lookup_by_name",
   "version": 1,
-  "description": "Sign on to MERIDIAN CORE, look up a member, and transfer funds between two of their shares (review then post).",
+  "description": "Sign on, search the member directory by LAST NAME, open the unique matching record, and return the member number and name.",
   "target": {
     "app": "meridian-core",
     "entry": {
@@ -34,41 +34,24 @@
       "example": null,
       "pattern": null
     },
-    "member_number": {
+    "last_name": {
       "type": "string",
-      "description": "Member number to look up",
+      "description": "Member surname to search",
       "sensitive": false,
-      "example": "100234",
-      "pattern": "[0-9]{1,10}"
-    },
-    "from_share": {
-      "type": "string",
-      "description": "Stable substring identifying the source share, e.g. 'Share Draft (Checking)'",
-      "sensitive": false,
-      "example": "Share Draft (Checking)",
-      "pattern": null
-    },
-    "to_share": {
-      "type": "string",
-      "description": "Stable substring identifying the destination share, e.g. 'S0001-3'",
-      "sensitive": false,
-      "example": "S0001-3",
-      "pattern": null
-    },
-    "amount": {
-      "type": "string",
-      "description": "Dollar amount to transfer",
-      "sensitive": false,
-      "example": "1",
-      "pattern": "[0-9]+(\\.[0-9]{1,2})?"
+      "example": "Lovelace",
+      "pattern": "[A-Za-z'\\- ]{1,40}"
     }
   },
-  "outcomes": {},
+  "outcomes": {
+    "MEMBER_NOT_FOUND": {
+      "description": "No member matches this surname."
+    }
+  },
   "outputs": {
-    "confirmation_number": {
+    "member_number": {
       "type": "string",
       "sensitive": false,
-      "region": "transfer_result",
+      "region": "identity",
       "from": {
         "ladder": [
           {
@@ -76,7 +59,31 @@
             "relation": "cell_right",
             "anchor": {
               "strategy": "text",
-              "text": "Confirmation:"
+              "text": "Member No.:"
+            },
+            "container": null
+          }
+        ],
+        "context": [],
+        "fingerprint": null,
+        "fragile": false
+      },
+      "parse": {
+        "kind": "text"
+      }
+    },
+    "member_name": {
+      "type": "string",
+      "sensitive": false,
+      "region": "identity",
+      "from": {
+        "ladder": [
+          {
+            "strategy": "relative",
+            "relation": "cell_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Name:"
             },
             "container": null
           }
@@ -98,7 +105,7 @@
           "relation": "container_of",
           "anchor": {
             "strategy": "text",
-            "text": "Confirmation:"
+            "text": "Member No.:"
           },
           "container": "table"
         }
@@ -107,30 +114,14 @@
       "fingerprint": null,
       "fragile": false
     },
-    "transfer_result": {
+    "outcome_member_not_found": {
       "ladder": [
         {
           "strategy": "relative",
           "relation": "container_of",
           "anchor": {
             "strategy": "text",
-            "text": "Confirmation:"
-          },
-          "container": "table"
-        }
-      ],
-      "context": [],
-      "fingerprint": null,
-      "fragile": false
-    },
-    "confirm_member": {
-      "ladder": [
-        {
-          "strategy": "relative",
-          "relation": "container_of",
-          "anchor": {
-            "strategy": "text",
-            "text": "Member:"
+            "text": "MEMBER INQUIRY / SELECTION"
           },
           "container": "table"
         }
@@ -319,10 +310,51 @@
     },
     {
       "id": "s5",
-      "intent": "Type member number",
+      "intent": "Search by last name",
+      "action": {
+        "kind": "select",
+        "option": "Last Name",
+        "match": "label"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Search by:"
+            },
+            "container": null
+          }
+        ],
+        "context": [],
+        "fingerprint": {
+          "role": "combobox",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "option_selected",
+          "option": "Last Name",
+          "match": "label"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s6",
+      "intent": "Type the surname",
       "action": {
         "kind": "type",
-        "text": "{param:member_number}"
+        "text": "{param:last_name}"
       },
       "target": {
         "ladder": [
@@ -334,10 +366,6 @@
               "text": "Value:"
             },
             "container": null
-          },
-          {
-            "strategy": "css",
-            "css": "tr:nth-of-type(3) > td > form > table > tbody > tr:nth-of-type(2) > td:nth-of-type(2) > input:nth-of-type(1)"
           }
         ],
         "context": [],
@@ -355,14 +383,14 @@
       "post": [
         {
           "kind": "value_matches_param",
-          "param": "member_number",
+          "param": "last_name",
           "normalize": "none"
         }
       ],
       "risk": "safe"
     },
     {
-      "id": "s6",
+      "id": "s7",
       "intent": "Click Search",
       "action": {
         "kind": "click"
@@ -377,10 +405,6 @@
           {
             "strategy": "text",
             "text": "Search"
-          },
-          {
-            "strategy": "css",
-            "css": "tr:nth-of-type(3) > td > form > table > tbody > tr:nth-of-type(2) > td:nth-of-type(2) > input:nth-of-type(2)"
           }
         ],
         "context": [],
@@ -406,8 +430,8 @@
       "risk": "safe"
     },
     {
-      "id": "s7",
-      "intent": "Click Select to open member record",
+      "id": "s8",
+      "intent": "Open the matching member record",
       "action": {
         "kind": "click"
       },
@@ -421,10 +445,6 @@
           {
             "strategy": "text",
             "text": "Select"
-          },
-          {
-            "strategy": "css",
-            "css": "tbody > tr:nth-of-type(3) > td > table > tbody > tr:nth-of-type(2) > td:nth-of-type(4) > a"
           }
         ],
         "context": [],
@@ -448,280 +468,41 @@
         }
       ],
       "risk": "safe"
-    },
-    {
-      "id": "s8",
-      "intent": "Open Funds Transfer",
-      "action": {
-        "kind": "click"
-      },
-      "target": {
-        "ladder": [
-          {
-            "strategy": "role",
-            "role": "link",
-            "name": "Funds Transfer"
-          },
-          {
-            "strategy": "text",
-            "text": "Funds Transfer"
-          }
-        ],
-        "context": [],
-        "fingerprint": {
-          "role": "link",
-          "editable": null
-        },
-        "fragile": false
-      },
-      "pre": [
-        {
-          "kind": "visible"
-        }
-      ],
-      "post": [
-        {
-          "kind": "role_name_visible",
-          "role": "heading",
-          "name": "FUNDS TRANSFER",
-          "context": []
-        }
-      ],
-      "risk": "safe"
-    },
-    {
-      "id": "s9",
-      "intent": "Choose the from-share",
-      "action": {
-        "kind": "select",
-        "option": "{param:from_share}",
-        "match": "contains"
-      },
-      "target": {
-        "ladder": [
-          {
-            "strategy": "relative",
-            "relation": "nearest_input_right",
-            "anchor": {
-              "strategy": "text",
-              "text": "From Share:"
-            },
-            "container": null
-          },
-          {
-            "strategy": "css",
-            "css": "select[name=\"from\"]"
-          }
-        ],
-        "context": [],
-        "fingerprint": {
-          "role": "combobox",
-          "editable": null
-        },
-        "fragile": false
-      },
-      "pre": [
-        {
-          "kind": "visible"
-        }
-      ],
-      "post": [
-        {
-          "kind": "option_selected",
-          "option": "{param:from_share}",
-          "match": "contains"
-        }
-      ],
-      "risk": "safe"
-    },
-    {
-      "id": "s10",
-      "intent": "Choose the to-share",
-      "action": {
-        "kind": "select",
-        "option": "{param:to_share}",
-        "match": "contains"
-      },
-      "target": {
-        "ladder": [
-          {
-            "strategy": "relative",
-            "relation": "nearest_input_right",
-            "anchor": {
-              "strategy": "text",
-              "text": "To Share:"
-            },
-            "container": null
-          },
-          {
-            "strategy": "css",
-            "css": "select[name=\"to\"]"
-          }
-        ],
-        "context": [],
-        "fingerprint": {
-          "role": "combobox",
-          "editable": null
-        },
-        "fragile": false
-      },
-      "pre": [
-        {
-          "kind": "visible"
-        }
-      ],
-      "post": [
-        {
-          "kind": "option_selected",
-          "option": "{param:to_share}",
-          "match": "contains"
-        }
-      ],
-      "risk": "safe"
-    },
-    {
-      "id": "s11",
-      "intent": "Enter the amount",
-      "action": {
-        "kind": "type",
-        "text": "{param:amount}"
-      },
-      "target": {
-        "ladder": [
-          {
-            "strategy": "relative",
-            "relation": "nearest_input_right",
-            "anchor": {
-              "strategy": "text",
-              "text": "Amount:"
-            },
-            "container": null
-          },
-          {
-            "strategy": "css",
-            "css": "input[name=\"amount\"]"
-          }
-        ],
-        "context": [],
-        "fingerprint": {
-          "role": "textbox",
-          "editable": true
-        },
-        "fragile": false
-      },
-      "pre": [
-        {
-          "kind": "editable"
-        }
-      ],
-      "post": [
-        {
-          "kind": "value_matches_param",
-          "param": "amount",
-          "normalize": "none"
-        }
-      ],
-      "risk": "safe"
-    },
-    {
-      "id": "s12",
-      "intent": "Continue to the confirmation screen",
-      "action": {
-        "kind": "click"
-      },
-      "target": {
-        "ladder": [
-          {
-            "strategy": "role",
-            "role": "button",
-            "name": "Continue"
-          },
-          {
-            "strategy": "text",
-            "text": "Continue"
-          }
-        ],
-        "context": [],
-        "fingerprint": {
-          "role": "button",
-          "editable": null
-        },
-        "fragile": false
-      },
-      "pre": [
-        {
-          "kind": "visible"
-        }
-      ],
-      "post": [
-        {
-          "kind": "role_name_visible",
-          "role": "heading",
-          "name": "CONFIRM FUNDS TRANSFER",
-          "context": []
-        },
-        {
-          "kind": "region_text_matches_param",
-          "region": "confirm_member",
-          "param": "member_number"
-        }
-      ],
-      "risk": "safe"
-    },
-    {
-      "id": "s13",
-      "intent": "Post the transfer",
-      "action": {
-        "kind": "click"
-      },
-      "target": {
-        "ladder": [
-          {
-            "strategy": "role",
-            "role": "button",
-            "name": "Post Transfer"
-          },
-          {
-            "strategy": "text",
-            "text": "Post Transfer"
-          }
-        ],
-        "context": [],
-        "fingerprint": {
-          "role": "button",
-          "editable": null
-        },
-        "fragile": false
-      },
-      "pre": [
-        {
-          "kind": "visible"
-        }
-      ],
-      "post": [
-        {
-          "kind": "role_name_visible",
-          "role": "heading",
-          "name": "TRANSFER POSTED",
-          "context": []
-        }
-      ],
-      "risk": "risky"
     }
   ],
-  "conditions": [],
+  "conditions": [
+    {
+      "id": "cond_member_not_found",
+      "armed_after": "s7",
+      "match": {
+        "kind": "region_text",
+        "region": "outcome_member_not_found",
+        "patterns": [
+          "No member records matched your search."
+        ]
+      },
+      "classify": "business_outcome",
+      "outcome_code": "MEMBER_NOT_FOUND",
+      "recovery": [],
+      "resume": null,
+      "restart_from": null,
+      "max_fires_per_run": 2,
+      "provenance": "authored",
+      "verified_by_eval": false
+    }
+  ],
   "checkpoint": {
     "all": [
       {
         "kind": "role_name_visible",
         "role": "heading",
-        "name": "TRANSFER POSTED",
+        "name": "MEMBER RECORD",
         "context": []
       },
       {
         "kind": "region_text_matches_param",
         "region": "identity",
-        "param": "member_number"
+        "param": "last_name"
       }
     ]
   },
@@ -729,6 +510,6 @@
   "recorded_by": null,
   "risk_review": {
     "reviewed_by": "ashish",
-    "artifact_hash": "c934640b3626982cafd606b3d3592b581eff829c78e7cafe9c8ffda814a69069"
+    "artifact_hash": "adac48e72869bcee5fb0f321fbc0b6d2dbbcb6d3f327f56f2365f80411e7759c"
   }
 }

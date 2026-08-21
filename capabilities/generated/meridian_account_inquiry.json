@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "name": "meridian_funds_transfer",
+  "name": "meridian_account_inquiry",
   "version": 1,
-  "description": "Sign on to MERIDIAN CORE, look up a member, and transfer funds between two of their shares (review then post).",
+  "description": "Sign on, open a member's record, and read their name, e-mail, and checking (Share Draft) balance in one inquiry.",
   "target": {
     "app": "meridian-core",
     "entry": {
@@ -40,35 +40,18 @@
       "sensitive": false,
       "example": "100234",
       "pattern": "[0-9]{1,10}"
-    },
-    "from_share": {
-      "type": "string",
-      "description": "Stable substring identifying the source share, e.g. 'Share Draft (Checking)'",
-      "sensitive": false,
-      "example": "Share Draft (Checking)",
-      "pattern": null
-    },
-    "to_share": {
-      "type": "string",
-      "description": "Stable substring identifying the destination share, e.g. 'S0001-3'",
-      "sensitive": false,
-      "example": "S0001-3",
-      "pattern": null
-    },
-    "amount": {
-      "type": "string",
-      "description": "Dollar amount to transfer",
-      "sensitive": false,
-      "example": "1",
-      "pattern": "[0-9]+(\\.[0-9]{1,2})?"
     }
   },
-  "outcomes": {},
+  "outcomes": {
+    "MEMBER_NOT_FOUND": {
+      "description": "No member exists with this number."
+    }
+  },
   "outputs": {
-    "confirmation_number": {
+    "member_name": {
       "type": "string",
       "sensitive": false,
-      "region": "transfer_result",
+      "region": "identity",
       "from": {
         "ladder": [
           {
@@ -76,7 +59,7 @@
             "relation": "cell_right",
             "anchor": {
               "strategy": "text",
-              "text": "Confirmation:"
+              "text": "Name:"
             },
             "container": null
           }
@@ -88,6 +71,55 @@
       "parse": {
         "kind": "text"
       }
+    },
+    "member_email": {
+      "type": "string",
+      "sensitive": true,
+      "region": "identity",
+      "from": {
+        "ladder": [
+          {
+            "strategy": "relative",
+            "relation": "cell_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "E-mail:"
+            },
+            "container": null
+          }
+        ],
+        "context": [],
+        "fingerprint": null,
+        "fragile": false
+      },
+      "parse": {
+        "kind": "text"
+      }
+    },
+    "checking_balance": {
+      "type": "decimal",
+      "sensitive": true,
+      "region": "output_checking_balance",
+      "from": {
+        "ladder": [
+          {
+            "strategy": "relative",
+            "relation": "cell_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Share Draft (Checking)"
+            },
+            "container": null
+          }
+        ],
+        "context": [],
+        "fingerprint": null,
+        "fragile": false
+      },
+      "parse": {
+        "kind": "money",
+        "locale": "en_US"
+      }
     }
   },
   "regions": {
@@ -98,7 +130,7 @@
           "relation": "container_of",
           "anchor": {
             "strategy": "text",
-            "text": "Confirmation:"
+            "text": "Member No.:"
           },
           "container": "table"
         }
@@ -107,14 +139,14 @@
       "fingerprint": null,
       "fragile": false
     },
-    "transfer_result": {
+    "output_checking_balance": {
       "ladder": [
         {
           "strategy": "relative",
           "relation": "container_of",
           "anchor": {
             "strategy": "text",
-            "text": "Confirmation:"
+            "text": "Share Draft (Checking)"
           },
           "container": "table"
         }
@@ -123,14 +155,14 @@
       "fingerprint": null,
       "fragile": false
     },
-    "confirm_member": {
+    "outcome_member_not_found": {
       "ladder": [
         {
           "strategy": "relative",
           "relation": "container_of",
           "anchor": {
             "strategy": "text",
-            "text": "Member:"
+            "text": "MEMBER INQUIRY / SELECTION"
           },
           "container": "table"
         }
@@ -448,274 +480,73 @@
         }
       ],
       "risk": "safe"
-    },
-    {
-      "id": "s8",
-      "intent": "Open Funds Transfer",
-      "action": {
-        "kind": "click"
-      },
-      "target": {
-        "ladder": [
-          {
-            "strategy": "role",
-            "role": "link",
-            "name": "Funds Transfer"
-          },
-          {
-            "strategy": "text",
-            "text": "Funds Transfer"
-          }
-        ],
-        "context": [],
-        "fingerprint": {
-          "role": "link",
-          "editable": null
-        },
-        "fragile": false
-      },
-      "pre": [
-        {
-          "kind": "visible"
-        }
-      ],
-      "post": [
-        {
-          "kind": "role_name_visible",
-          "role": "heading",
-          "name": "FUNDS TRANSFER",
-          "context": []
-        }
-      ],
-      "risk": "safe"
-    },
-    {
-      "id": "s9",
-      "intent": "Choose the from-share",
-      "action": {
-        "kind": "select",
-        "option": "{param:from_share}",
-        "match": "contains"
-      },
-      "target": {
-        "ladder": [
-          {
-            "strategy": "relative",
-            "relation": "nearest_input_right",
-            "anchor": {
-              "strategy": "text",
-              "text": "From Share:"
-            },
-            "container": null
-          },
-          {
-            "strategy": "css",
-            "css": "select[name=\"from\"]"
-          }
-        ],
-        "context": [],
-        "fingerprint": {
-          "role": "combobox",
-          "editable": null
-        },
-        "fragile": false
-      },
-      "pre": [
-        {
-          "kind": "visible"
-        }
-      ],
-      "post": [
-        {
-          "kind": "option_selected",
-          "option": "{param:from_share}",
-          "match": "contains"
-        }
-      ],
-      "risk": "safe"
-    },
-    {
-      "id": "s10",
-      "intent": "Choose the to-share",
-      "action": {
-        "kind": "select",
-        "option": "{param:to_share}",
-        "match": "contains"
-      },
-      "target": {
-        "ladder": [
-          {
-            "strategy": "relative",
-            "relation": "nearest_input_right",
-            "anchor": {
-              "strategy": "text",
-              "text": "To Share:"
-            },
-            "container": null
-          },
-          {
-            "strategy": "css",
-            "css": "select[name=\"to\"]"
-          }
-        ],
-        "context": [],
-        "fingerprint": {
-          "role": "combobox",
-          "editable": null
-        },
-        "fragile": false
-      },
-      "pre": [
-        {
-          "kind": "visible"
-        }
-      ],
-      "post": [
-        {
-          "kind": "option_selected",
-          "option": "{param:to_share}",
-          "match": "contains"
-        }
-      ],
-      "risk": "safe"
-    },
-    {
-      "id": "s11",
-      "intent": "Enter the amount",
-      "action": {
-        "kind": "type",
-        "text": "{param:amount}"
-      },
-      "target": {
-        "ladder": [
-          {
-            "strategy": "relative",
-            "relation": "nearest_input_right",
-            "anchor": {
-              "strategy": "text",
-              "text": "Amount:"
-            },
-            "container": null
-          },
-          {
-            "strategy": "css",
-            "css": "input[name=\"amount\"]"
-          }
-        ],
-        "context": [],
-        "fingerprint": {
-          "role": "textbox",
-          "editable": true
-        },
-        "fragile": false
-      },
-      "pre": [
-        {
-          "kind": "editable"
-        }
-      ],
-      "post": [
-        {
-          "kind": "value_matches_param",
-          "param": "amount",
-          "normalize": "none"
-        }
-      ],
-      "risk": "safe"
-    },
-    {
-      "id": "s12",
-      "intent": "Continue to the confirmation screen",
-      "action": {
-        "kind": "click"
-      },
-      "target": {
-        "ladder": [
-          {
-            "strategy": "role",
-            "role": "button",
-            "name": "Continue"
-          },
-          {
-            "strategy": "text",
-            "text": "Continue"
-          }
-        ],
-        "context": [],
-        "fingerprint": {
-          "role": "button",
-          "editable": null
-        },
-        "fragile": false
-      },
-      "pre": [
-        {
-          "kind": "visible"
-        }
-      ],
-      "post": [
-        {
-          "kind": "role_name_visible",
-          "role": "heading",
-          "name": "CONFIRM FUNDS TRANSFER",
-          "context": []
-        },
-        {
-          "kind": "region_text_matches_param",
-          "region": "confirm_member",
-          "param": "member_number"
-        }
-      ],
-      "risk": "safe"
-    },
-    {
-      "id": "s13",
-      "intent": "Post the transfer",
-      "action": {
-        "kind": "click"
-      },
-      "target": {
-        "ladder": [
-          {
-            "strategy": "role",
-            "role": "button",
-            "name": "Post Transfer"
-          },
-          {
-            "strategy": "text",
-            "text": "Post Transfer"
-          }
-        ],
-        "context": [],
-        "fingerprint": {
-          "role": "button",
-          "editable": null
-        },
-        "fragile": false
-      },
-      "pre": [
-        {
-          "kind": "visible"
-        }
-      ],
-      "post": [
-        {
-          "kind": "role_name_visible",
-          "role": "heading",
-          "name": "TRANSFER POSTED",
-          "context": []
-        }
-      ],
-      "risk": "risky"
     }
   ],
-  "conditions": [],
+  "conditions": [
+    {
+      "id": "cond_member_not_found",
+      "armed_after": "s6",
+      "match": {
+        "kind": "region_text",
+        "region": "outcome_member_not_found",
+        "patterns": [
+          "No member records matched your search."
+        ]
+      },
+      "classify": "business_outcome",
+      "outcome_code": "MEMBER_NOT_FOUND",
+      "recovery": [],
+      "resume": null,
+      "restart_from": null,
+      "max_fires_per_run": 2,
+      "provenance": "authored",
+      "verified_by_eval": false
+    },
+    {
+      "id": "cond_session_expired",
+      "armed_after": "s4",
+      "match": {
+        "kind": "role_name",
+        "role": "heading",
+        "name": "OPERATOR SIGN ON",
+        "context": []
+      },
+      "classify": "recoverable",
+      "outcome_code": null,
+      "recovery": [
+        {
+          "id": "r1",
+          "intent": "Return to the sign-on page",
+          "action": {
+            "kind": "navigate",
+            "url": "https://web-sample.interface-hiring.com/"
+          },
+          "target": null,
+          "pre": [],
+          "post": [
+            {
+              "kind": "role_name_visible",
+              "role": "heading",
+              "name": "OPERATOR SIGN ON",
+              "context": []
+            }
+          ],
+          "risk": "safe"
+        }
+      ],
+      "resume": "restart_from",
+      "restart_from": "s1",
+      "max_fires_per_run": 2,
+      "provenance": "authored",
+      "verified_by_eval": false
+    }
+  ],
   "checkpoint": {
     "all": [
       {
         "kind": "role_name_visible",
         "role": "heading",
-        "name": "TRANSFER POSTED",
+        "name": "MEMBER RECORD",
         "context": []
       },
       {
@@ -729,6 +560,6 @@
   "recorded_by": null,
   "risk_review": {
     "reviewed_by": "ashish",
-    "artifact_hash": "c934640b3626982cafd606b3d3592b581eff829c78e7cafe9c8ffda814a69069"
+    "artifact_hash": "a2eea777a7a5fdaef5df4fa295578ca7227457fd8e475aca85906c6d9cc042a6"
   }
 }

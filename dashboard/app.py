@@ -98,6 +98,39 @@ def _plain_sentence(kind: str, status: str, outputs: dict[str, Any] | None, code
     return "—"
 
 
+def _step_timings(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Per-step wall-clock benchmarks, computed from the trace timestamps:
+    each step's duration runs from its step_started to its postconditions_met
+    (or to the next step's start, whichever the trace shows first)."""
+    def _ts(e: dict[str, Any]) -> datetime | None:
+        try:
+            return datetime.fromisoformat(str(e.get("ts")))
+        except (TypeError, ValueError):
+            return None
+
+    timings: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    started_at: datetime | None = None
+    for e in events:
+        name = e.get("event")
+        if name == "step_started":
+            if current is not None and started_at is not None and current.get("ms") is None:
+                end = _ts(e)
+                current["ms"] = int((end - started_at).total_seconds() * 1000) if end else None
+            current = {"step": e.get("step"), "intent": e.get("intent"),
+                       "risk": e.get("risk"), "ms": None}
+            started_at = _ts(e)
+            timings.append(current)
+        elif name == "postconditions_met" and current is not None and started_at is not None:
+            end = _ts(e)
+            if end is not None:
+                current["ms"] = int((end - started_at).total_seconds() * 1000)
+    max_ms = max((t["ms"] for t in timings if t.get("ms")), default=0) or 1
+    for t in timings:
+        t["bar"] = int(100 * (t["ms"] or 0) / max_ms)
+    return timings
+
+
 def _summarize_run(run_dir: Path) -> dict[str, Any] | None:
     events = _events(run_dir)
     if not events:
@@ -248,10 +281,12 @@ def create_dashboard(
         if not run_dir.is_dir() or ".." in run_id:
             abort(404)
         _, summaries = _load(run_id)
+        events = _events(run_dir)
         return render_template_string(
             _DETAIL,
             run_id=run_id,
-            events=_events(run_dir),
+            events=events,
+            timings=_step_timings(events),
             summary=summaries[0] if summaries else None,
         )
 
@@ -384,11 +419,26 @@ _DETAIL = _CSS + """
 {% if summary.sha %}<div class="muted k">recipe fingerprint {{summary.sha[:24]}}…</div>{% endif %}
 {% else %}<h1>{{run_id}}</h1>{% endif %}
 
+{% if timings %}
+<h2>Step timing benchmarks</h2>
+<table style="max-width:760px">
+ <tr><th>Step</th><th>What it did</th><th style="width:90px">Time</th><th style="width:220px"></th></tr>
+{% for t in timings %}
+ <tr>
+   <td class="k">{{t.step}}{% if t.risk == 'risky' %} <span class="pill risk">risky</span>{% endif %}</td>
+   <td class="muted">{{t.intent}}</td>
+   <td class="k">{{t.ms if t.ms is not none else '—'}}{{' ms' if t.ms is not none else ''}}</td>
+   <td><div style="height:8px;border-radius:4px;background:#1f6feb;width:{{t.bar}}%"></div></td>
+ </tr>
+{% endfor %}
+</table>
+{% endif %}
+
 {% if summary and summary.evidence %}
-<h2>Evidence</h2>
+<h2>Evidence (screenshots &amp; DOM snapshots)</h2>
 {% for f in summary.evidence %}
   {% if f.endswith('.png') %}<img src="/run/{{run_id}}/evidence/{{f}}">
-  {% else %}<div><a href="/run/{{run_id}}/evidence/{{f}}">{{f}}</a></div>{% endif %}
+  {% else %}<div><a href="/run/{{run_id}}/evidence/{{f}}">{{f}} (accessibility/DOM snapshot)</a></div>{% endif %}
 {% endfor %}
 {% endif %}
 

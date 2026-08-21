@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import threading
 from pathlib import Path
 from typing import Any
@@ -100,6 +101,27 @@ def _effective_hash(cap: Capability) -> str:
     return hashlib.sha256(dump_capability(cap).encode()).hexdigest()
 
 
+_CURRENCY = re.compile(
+    r"^\s*\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?\s*$"
+    r"|^\s*\$?\s*\d+(?:\.\d{1,2})?\s*$"
+)
+
+
+def _sanitize_value(cap: Capability, name: str, value: str) -> str:
+    """Input sanitizer at the boundary: a caller sending '$1,000.50' for a
+    non-sensitive amount-like parameter means 1000.50 — strip currency
+    dressing ($, thousands commas, surrounding whitespace) so the artifact's
+    declared pattern validates the PURE number. Applied only when the raw
+    value unambiguously looks like currency; anything else passes through
+    untouched and stands or falls on the artifact's own pattern."""
+    spec = cap.parameters.get(name)
+    if spec is None or spec.sensitive:
+        return value
+    if _CURRENCY.match(value):
+        return value.replace("$", "").replace(",", "").strip()
+    return value.strip() if value != value.strip() else value
+
+
 def create_api(
     gen_dir: str | Path = "capabilities/generated",
     runs_dir: str | Path = "runs",
@@ -124,6 +146,13 @@ def create_api(
             return jsonify({"error": f"unknown capability {name!r}"}), 404
         return jsonify(_contract(cap))
 
+    # Idempotency: a caller retrying the same logical transaction supplies an
+    # idempotency_key; a repeat with the same (capability, key) returns the
+    # ORIGINAL envelope instead of re-executing — a transfer cannot be posted
+    # twice by a nervous retry. In-memory by design here; production would back
+    # this with a store keyed the same way.
+    completed: dict[tuple[str, str], tuple[dict[str, Any], int]] = {}
+
     @app.post("/capabilities/<name>/invoke")
     def invoke(name: str) -> Any:
         cap = _load_catalog(gen, only).get(name)
@@ -131,8 +160,15 @@ def create_api(
             return jsonify({"error": f"unknown capability {name!r}"}), 404
 
         body = request.get_json(silent=True) or {}
+        idem_key = str(
+            body.get("idempotency_key") or request.headers.get("Idempotency-Key") or ""
+        )
+        if idem_key and (name, idem_key) in completed:
+            envelope, status = completed[(name, idem_key)]
+            return jsonify({**envelope, "idempotent_replay": True}), status
+
         params: dict[str, str] = {
-            k: str(v) for k, v in (body.get("params") or {}).items()
+            k: _sanitize_value(cap, k, str(v)) for k, v in (body.get("params") or {}).items()
         }
         # Credentials never travel in the request body: sensitive params are
         # injected from the environment at the boundary.
@@ -156,7 +192,10 @@ def create_api(
             "run_dir": str(run_dir) if run_dir is not None else None,
             "result": _RESULT_ADAPTER.dump_python(result, mode="json"),
         }
-        return jsonify(envelope), _STATUS[result.result]
+        status = _STATUS[result.result]
+        if idem_key:
+            completed[(name, idem_key)] = (envelope, status)
+        return jsonify(envelope), status
 
     return app
 

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "name": "meridian_funds_transfer",
+  "name": "meridian_place_hold",
   "version": 1,
-  "description": "Sign on to MERIDIAN CORE, look up a member, and transfer funds between two of their shares (review then post).",
+  "description": "Sign on, open a member's record, and place a hold on one of their shares (review, then post). Supervisor-only: a teller attempt returns the SUPERVISOR_REQUIRED outcome.",
   "target": {
     "app": "meridian-core",
     "entry": {
@@ -41,34 +41,38 @@
       "example": "100234",
       "pattern": "[0-9]{1,10}"
     },
-    "from_share": {
+    "share": {
       "type": "string",
-      "description": "Stable substring identifying the source share, e.g. 'Share Draft (Checking)'",
+      "description": "Stable substring identifying the share, e.g. 'Share Draft (Checking)'",
       "sensitive": false,
       "example": "Share Draft (Checking)",
       "pattern": null
     },
-    "to_share": {
+    "reason": {
       "type": "string",
-      "description": "Stable substring identifying the destination share, e.g. 'S0001-3'",
+      "description": "Stable substring of the hold reason option",
       "sensitive": false,
-      "example": "S0001-3",
+      "example": "FRAUD",
       "pattern": null
     },
-    "amount": {
+    "notes": {
       "type": "string",
-      "description": "Dollar amount to transfer",
+      "description": "Hold notes",
       "sensitive": false,
-      "example": "1",
-      "pattern": "[0-9]+(\\.[0-9]{1,2})?"
+      "example": "requested by member",
+      "pattern": null
     }
   },
-  "outcomes": {},
+  "outcomes": {
+    "SUPERVISOR_REQUIRED": {
+      "description": "This operator is not authorized; a supervisor must complete the hold."
+    }
+  },
   "outputs": {
     "confirmation_number": {
       "type": "string",
       "sensitive": false,
-      "region": "transfer_result",
+      "region": "identity",
       "from": {
         "ladder": [
           {
@@ -91,6 +95,22 @@
     }
   },
   "regions": {
+    "confirm_member": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "anchor": {
+            "strategy": "text",
+            "text": "Member:"
+          },
+          "container": "table"
+        }
+      ],
+      "context": [],
+      "fingerprint": null,
+      "fragile": false
+    },
     "identity": {
       "ladder": [
         {
@@ -107,30 +127,14 @@
       "fingerprint": null,
       "fragile": false
     },
-    "transfer_result": {
+    "outcome_supervisor": {
       "ladder": [
         {
           "strategy": "relative",
           "relation": "container_of",
           "anchor": {
             "strategy": "text",
-            "text": "Confirmation:"
-          },
-          "container": "table"
-        }
-      ],
-      "context": [],
-      "fingerprint": null,
-      "fragile": false
-    },
-    "confirm_member": {
-      "ladder": [
-        {
-          "strategy": "relative",
-          "relation": "container_of",
-          "anchor": {
-            "strategy": "text",
-            "text": "Member:"
+            "text": "SUPERVISOR OVERRIDE REQUIRED"
           },
           "container": "table"
         }
@@ -451,7 +455,7 @@
     },
     {
       "id": "s8",
-      "intent": "Open Funds Transfer",
+      "intent": "Open the Place Account Hold form",
       "action": {
         "kind": "click"
       },
@@ -460,11 +464,11 @@
           {
             "strategy": "role",
             "role": "link",
-            "name": "Funds Transfer"
+            "name": "Place Account Hold"
           },
           {
             "strategy": "text",
-            "text": "Funds Transfer"
+            "text": "Place Account Hold"
           }
         ],
         "context": [],
@@ -483,7 +487,7 @@
         {
           "kind": "role_name_visible",
           "role": "heading",
-          "name": "FUNDS TRANSFER",
+          "name": "PLACE ACCOUNT HOLD",
           "context": []
         }
       ],
@@ -491,10 +495,10 @@
     },
     {
       "id": "s9",
-      "intent": "Choose the from-share",
+      "intent": "Choose the share to hold",
       "action": {
         "kind": "select",
-        "option": "{param:from_share}",
+        "option": "{param:share}",
         "match": "contains"
       },
       "target": {
@@ -504,13 +508,9 @@
             "relation": "nearest_input_right",
             "anchor": {
               "strategy": "text",
-              "text": "From Share:"
+              "text": "Share:"
             },
             "container": null
-          },
-          {
-            "strategy": "css",
-            "css": "select[name=\"from\"]"
           }
         ],
         "context": [],
@@ -528,7 +528,7 @@
       "post": [
         {
           "kind": "option_selected",
-          "option": "{param:from_share}",
+          "option": "{param:share}",
           "match": "contains"
         }
       ],
@@ -536,10 +536,10 @@
     },
     {
       "id": "s10",
-      "intent": "Choose the to-share",
+      "intent": "Choose the reason code",
       "action": {
         "kind": "select",
-        "option": "{param:to_share}",
+        "option": "{param:reason}",
         "match": "contains"
       },
       "target": {
@@ -549,13 +549,9 @@
             "relation": "nearest_input_right",
             "anchor": {
               "strategy": "text",
-              "text": "To Share:"
+              "text": "Reason Code:"
             },
             "container": null
-          },
-          {
-            "strategy": "css",
-            "css": "select[name=\"to\"]"
           }
         ],
         "context": [],
@@ -573,7 +569,7 @@
       "post": [
         {
           "kind": "option_selected",
-          "option": "{param:to_share}",
+          "option": "{param:reason}",
           "match": "contains"
         }
       ],
@@ -581,10 +577,10 @@
     },
     {
       "id": "s11",
-      "intent": "Enter the amount",
+      "intent": "Enter the hold notes",
       "action": {
         "kind": "type",
-        "text": "{param:amount}"
+        "text": "{param:notes}"
       },
       "target": {
         "ladder": [
@@ -593,13 +589,9 @@
             "relation": "nearest_input_right",
             "anchor": {
               "strategy": "text",
-              "text": "Amount:"
+              "text": "Notes:"
             },
             "container": null
-          },
-          {
-            "strategy": "css",
-            "css": "input[name=\"amount\"]"
           }
         ],
         "context": [],
@@ -617,7 +609,7 @@
       "post": [
         {
           "kind": "value_matches_param",
-          "param": "amount",
+          "param": "notes",
           "normalize": "none"
         }
       ],
@@ -657,7 +649,7 @@
         {
           "kind": "role_name_visible",
           "role": "heading",
-          "name": "CONFIRM FUNDS TRANSFER",
+          "name": "CONFIRM ACCOUNT HOLD",
           "context": []
         },
         {
@@ -670,7 +662,7 @@
     },
     {
       "id": "s13",
-      "intent": "Post the transfer",
+      "intent": "Apply the hold",
       "action": {
         "kind": "click"
       },
@@ -679,11 +671,11 @@
           {
             "strategy": "role",
             "role": "button",
-            "name": "Post Transfer"
+            "name": "Apply Hold"
           },
           {
             "strategy": "text",
-            "text": "Post Transfer"
+            "text": "Apply Hold"
           }
         ],
         "context": [],
@@ -702,20 +694,40 @@
         {
           "kind": "role_name_visible",
           "role": "heading",
-          "name": "TRANSFER POSTED",
+          "name": "ACCOUNT HOLD APPLIED",
           "context": []
         }
       ],
       "risk": "risky"
     }
   ],
-  "conditions": [],
+  "conditions": [
+    {
+      "id": "cond_supervisor_required",
+      "armed_after": "s8",
+      "match": {
+        "kind": "region_text",
+        "region": "outcome_supervisor",
+        "patterns": [
+          "is not authorized to perform this function"
+        ]
+      },
+      "classify": "business_outcome",
+      "outcome_code": "SUPERVISOR_REQUIRED",
+      "recovery": [],
+      "resume": null,
+      "restart_from": null,
+      "max_fires_per_run": 2,
+      "provenance": "authored",
+      "verified_by_eval": false
+    }
+  ],
   "checkpoint": {
     "all": [
       {
         "kind": "role_name_visible",
         "role": "heading",
-        "name": "TRANSFER POSTED",
+        "name": "ACCOUNT HOLD APPLIED",
         "context": []
       },
       {
@@ -729,6 +741,6 @@
   "recorded_by": null,
   "risk_review": {
     "reviewed_by": "ashish",
-    "artifact_hash": "c934640b3626982cafd606b3d3592b581eff829c78e7cafe9c8ffda814a69069"
+    "artifact_hash": "792166d7a6be3f1acf685b81a688b46c6ee5a5aedbe0b0cfdb87ffa3cb3d32fd"
   }
 }

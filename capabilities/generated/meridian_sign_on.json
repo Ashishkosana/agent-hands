@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "name": "meridian_sign_on",
+  "version": 1,
+  "description": "Sign on to MERIDIAN CORE and verify the session is active (the main menu is reachable).",
+  "target": {
+    "app": "meridian-core",
+    "entry": {
+      "web": {
+        "url": "https://web-sample.interface-hiring.com/"
+      }
+    }
+  },
+  "requires": [
+    {
+      "kind": "role_name_visible",
+      "role": "heading",
+      "name": "OPERATOR SIGN ON",
+      "context": []
+    }
+  ],
+  "parameters": {
+    "operator_id": {
+      "type": "string",
+      "description": "Operator sign-on ID",
+      "sensitive": false,
+      "example": "teller1",
+      "pattern": "[a-zA-Z0-9_]{1,32}"
+    },
+    "password": {
+      "type": "string",
+      "description": "Operator password",
+      "sensitive": true,
+      "example": null,
+      "pattern": null
+    }
+  },
+  "outcomes": {},
+  "outputs": {},
+  "regions": {},
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Type operator ID",
+      "action": {
+        "kind": "type",
+        "text": "{param:operator_id}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Operator ID:"
+            },
+            "container": null
+          },
+          {
+            "strategy": "css",
+            "css": "tr:nth-of-type(2) > td > form > table > tbody > tr:nth-of-type(1) > td:nth-of-type(2) > input"
+          }
+        ],
+        "context": [],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "operator_id",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s2",
+      "intent": "Type password",
+      "action": {
+        "kind": "type",
+        "text": "{param:password}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Password:"
+            },
+            "container": null
+          },
+          {
+            "strategy": "css",
+            "css": "tr:nth-of-type(2) > td > form > table > tbody > tr:nth-of-type(2) > td:nth-of-type(2) > input"
+          }
+        ],
+        "context": [],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "password",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s3",
+      "intent": "Click Sign On",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "button",
+            "name": "Sign On"
+          },
+          {
+            "strategy": "text",
+            "text": "Sign On"
+          },
+          {
+            "strategy": "css",
+            "css": "tr:nth-of-type(2) > td > form > table > tbody > tr:nth-of-type(4) > td:nth-of-type(2) > input"
+          }
+        ],
+        "context": [],
+        "fingerprint": {
+          "role": "button",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "MAIN MENU",
+          "context": []
+        }
+      ],
+      "risk": "risky"
+    }
+  ],
+  "conditions": [],
+  "checkpoint": {
+    "all": [
+      {
+        "kind": "role_name_visible",
+        "role": "heading",
+        "name": "MAIN MENU",
+        "context": []
+      }
+    ]
+  },
+  "allow_unbound_checkpoint": true,
+  "recorded_by": null,
+  "risk_review": {
+    "reviewed_by": "ashish",
+    "artifact_hash": "64acfa44d7c4e427a61090bb3dce67a93249b7a25c178fa675c8d9ff33f3edac"
+  }
+}

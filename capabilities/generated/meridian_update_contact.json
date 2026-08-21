@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "name": "meridian_funds_transfer",
+  "name": "meridian_update_contact",
   "version": 1,
-  "description": "Sign on to MERIDIAN CORE, look up a member, and transfer funds between two of their shares (review then post).",
+  "description": "Sign on, open a member's record, and update their e-mail, phone, and mailing address.",
   "target": {
     "app": "meridian-core",
     "entry": {
@@ -41,55 +41,30 @@
       "example": "100234",
       "pattern": "[0-9]{1,10}"
     },
-    "from_share": {
+    "email": {
       "type": "string",
-      "description": "Stable substring identifying the source share, e.g. 'Share Draft (Checking)'",
+      "description": "New e-mail address",
       "sensitive": false,
-      "example": "Share Draft (Checking)",
-      "pattern": null
+      "example": "ada@example.com",
+      "pattern": "[^@\\s]+@[^@\\s]+\\.[^@\\s]+"
     },
-    "to_share": {
+    "phone": {
       "type": "string",
-      "description": "Stable substring identifying the destination share, e.g. 'S0001-3'",
+      "description": "New phone number",
       "sensitive": false,
-      "example": "S0001-3",
-      "pattern": null
+      "example": "555-0100",
+      "pattern": "[0-9\\-() +.]{7,20}"
     },
-    "amount": {
+    "address": {
       "type": "string",
-      "description": "Dollar amount to transfer",
+      "description": "New mailing address",
       "sensitive": false,
-      "example": "1",
-      "pattern": "[0-9]+(\\.[0-9]{1,2})?"
+      "example": "1 Main St, Springfield",
+      "pattern": null
     }
   },
   "outcomes": {},
-  "outputs": {
-    "confirmation_number": {
-      "type": "string",
-      "sensitive": false,
-      "region": "transfer_result",
-      "from": {
-        "ladder": [
-          {
-            "strategy": "relative",
-            "relation": "cell_right",
-            "anchor": {
-              "strategy": "text",
-              "text": "Confirmation:"
-            },
-            "container": null
-          }
-        ],
-        "context": [],
-        "fingerprint": null,
-        "fragile": false
-      },
-      "parse": {
-        "kind": "text"
-      }
-    }
-  },
+  "outputs": {},
   "regions": {
     "identity": {
       "ladder": [
@@ -98,39 +73,7 @@
           "relation": "container_of",
           "anchor": {
             "strategy": "text",
-            "text": "Confirmation:"
-          },
-          "container": "table"
-        }
-      ],
-      "context": [],
-      "fingerprint": null,
-      "fragile": false
-    },
-    "transfer_result": {
-      "ladder": [
-        {
-          "strategy": "relative",
-          "relation": "container_of",
-          "anchor": {
-            "strategy": "text",
-            "text": "Confirmation:"
-          },
-          "container": "table"
-        }
-      ],
-      "context": [],
-      "fingerprint": null,
-      "fragile": false
-    },
-    "confirm_member": {
-      "ladder": [
-        {
-          "strategy": "relative",
-          "relation": "container_of",
-          "anchor": {
-            "strategy": "text",
-            "text": "Member:"
+            "text": "MEMBER INFORMATION UPDATED"
           },
           "container": "table"
         }
@@ -451,7 +394,7 @@
     },
     {
       "id": "s8",
-      "intent": "Open Funds Transfer",
+      "intent": "Open the Update Member Information form",
       "action": {
         "kind": "click"
       },
@@ -460,11 +403,11 @@
           {
             "strategy": "role",
             "role": "link",
-            "name": "Funds Transfer"
+            "name": "Update Member Information"
           },
           {
             "strategy": "text",
-            "text": "Funds Transfer"
+            "text": "Update Member Information"
           }
         ],
         "context": [],
@@ -483,7 +426,7 @@
         {
           "kind": "role_name_visible",
           "role": "heading",
-          "name": "FUNDS TRANSFER",
+          "name": "UPDATE MEMBER INFORMATION",
           "context": []
         }
       ],
@@ -491,100 +434,10 @@
     },
     {
       "id": "s9",
-      "intent": "Choose the from-share",
-      "action": {
-        "kind": "select",
-        "option": "{param:from_share}",
-        "match": "contains"
-      },
-      "target": {
-        "ladder": [
-          {
-            "strategy": "relative",
-            "relation": "nearest_input_right",
-            "anchor": {
-              "strategy": "text",
-              "text": "From Share:"
-            },
-            "container": null
-          },
-          {
-            "strategy": "css",
-            "css": "select[name=\"from\"]"
-          }
-        ],
-        "context": [],
-        "fingerprint": {
-          "role": "combobox",
-          "editable": null
-        },
-        "fragile": false
-      },
-      "pre": [
-        {
-          "kind": "visible"
-        }
-      ],
-      "post": [
-        {
-          "kind": "option_selected",
-          "option": "{param:from_share}",
-          "match": "contains"
-        }
-      ],
-      "risk": "safe"
-    },
-    {
-      "id": "s10",
-      "intent": "Choose the to-share",
-      "action": {
-        "kind": "select",
-        "option": "{param:to_share}",
-        "match": "contains"
-      },
-      "target": {
-        "ladder": [
-          {
-            "strategy": "relative",
-            "relation": "nearest_input_right",
-            "anchor": {
-              "strategy": "text",
-              "text": "To Share:"
-            },
-            "container": null
-          },
-          {
-            "strategy": "css",
-            "css": "select[name=\"to\"]"
-          }
-        ],
-        "context": [],
-        "fingerprint": {
-          "role": "combobox",
-          "editable": null
-        },
-        "fragile": false
-      },
-      "pre": [
-        {
-          "kind": "visible"
-        }
-      ],
-      "post": [
-        {
-          "kind": "option_selected",
-          "option": "{param:to_share}",
-          "match": "contains"
-        }
-      ],
-      "risk": "safe"
-    },
-    {
-      "id": "s11",
-      "intent": "Enter the amount",
+      "intent": "Enter the new e-mail",
       "action": {
         "kind": "type",
-        "text": "{param:amount}"
+        "text": "{param:email}"
       },
       "target": {
         "ladder": [
@@ -593,13 +446,9 @@
             "relation": "nearest_input_right",
             "anchor": {
               "strategy": "text",
-              "text": "Amount:"
+              "text": "E-mail:"
             },
             "container": null
-          },
-          {
-            "strategy": "css",
-            "css": "input[name=\"amount\"]"
           }
         ],
         "context": [],
@@ -617,7 +466,87 @@
       "post": [
         {
           "kind": "value_matches_param",
-          "param": "amount",
+          "param": "email",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s10",
+      "intent": "Enter the new phone",
+      "action": {
+        "kind": "type",
+        "text": "{param:phone}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Phone:"
+            },
+            "container": null
+          }
+        ],
+        "context": [],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "phone",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s11",
+      "intent": "Enter the new mailing address",
+      "action": {
+        "kind": "type",
+        "text": "{param:address}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Mailing Address:"
+            },
+            "container": null
+          }
+        ],
+        "context": [],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "address",
           "normalize": "none"
         }
       ],
@@ -625,7 +554,7 @@
     },
     {
       "id": "s12",
-      "intent": "Continue to the confirmation screen",
+      "intent": "Save the updated contact details",
       "action": {
         "kind": "click"
       },
@@ -634,11 +563,11 @@
           {
             "strategy": "role",
             "role": "button",
-            "name": "Continue"
+            "name": "Save Changes"
           },
           {
             "strategy": "text",
-            "text": "Continue"
+            "text": "Save Changes"
           }
         ],
         "context": [],
@@ -657,52 +586,7 @@
         {
           "kind": "role_name_visible",
           "role": "heading",
-          "name": "CONFIRM FUNDS TRANSFER",
-          "context": []
-        },
-        {
-          "kind": "region_text_matches_param",
-          "region": "confirm_member",
-          "param": "member_number"
-        }
-      ],
-      "risk": "safe"
-    },
-    {
-      "id": "s13",
-      "intent": "Post the transfer",
-      "action": {
-        "kind": "click"
-      },
-      "target": {
-        "ladder": [
-          {
-            "strategy": "role",
-            "role": "button",
-            "name": "Post Transfer"
-          },
-          {
-            "strategy": "text",
-            "text": "Post Transfer"
-          }
-        ],
-        "context": [],
-        "fingerprint": {
-          "role": "button",
-          "editable": null
-        },
-        "fragile": false
-      },
-      "pre": [
-        {
-          "kind": "visible"
-        }
-      ],
-      "post": [
-        {
-          "kind": "role_name_visible",
-          "role": "heading",
-          "name": "TRANSFER POSTED",
+          "name": "MEMBER INFORMATION UPDATED",
           "context": []
         }
       ],
@@ -715,7 +599,7 @@
       {
         "kind": "role_name_visible",
         "role": "heading",
-        "name": "TRANSFER POSTED",
+        "name": "MEMBER INFORMATION UPDATED",
         "context": []
       },
       {
@@ -729,6 +613,6 @@
   "recorded_by": null,
   "risk_review": {
     "reviewed_by": "ashish",
-    "artifact_hash": "c934640b3626982cafd606b3d3592b581eff829c78e7cafe9c8ffda814a69069"
+    "artifact_hash": "0887780e25f300c3c4274021aafe58d6f06678ecf2e29155b24de2803d3c49dc"
   }
 }

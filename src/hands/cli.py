@@ -114,7 +114,10 @@ def _review(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     except (OSError, ValueError) as exc:
         parser.error(f"cannot load artifact: {exc}")
     risky = [s.id for s in capability.steps if s.risk == "risky"]
-    signed = sign_risk_review(capability, args.operator)
+    try:
+        signed = sign_risk_review(capability, args.operator)
+    except ValueError as exc:  # maker-checker refusal — a policy answer, not a crash
+        parser.error(str(exc))
     args.artifact.write_text(dump_capability(signed))
     print(
         f"signed by {args.operator!r}: {len(risky)} risky step(s) {risky}, "
@@ -131,6 +134,7 @@ def _explain(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     import hashlib
 
     from hands.artifact import dump_capability, risk_review_valid
+    from hands.trace import is_chained, verify_chain
 
     run_dir = args.runs_dir / args.run_id
     trace_file = run_dir / "trace.jsonl"
@@ -156,8 +160,8 @@ def _explain(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     version = started.get("version", "?")
     run_hash = str(started.get("artifact_sha256", ""))
 
-    # Contract status vs the artifact on disk now, plus the signer.
-    status, signer = "unknown (artifact not found)", "—"
+    # Contract status vs the artifact on disk now, plus maker/checker identities.
+    status, signer, maker_checker = "unknown (artifact not found)", "—", "—"
     art = args.gen_dir / f"{name}.json"
     if art.exists():
         try:
@@ -175,8 +179,28 @@ def _explain(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
                 if rv.reviewed_by
                 else "unsigned"
             )
+            maker = cap.recorded_by or "(not recorded)"
+            checker = rv.reviewed_by or "(unsigned)"
+            distinct = (
+                "distinct ok (four-eyes)"
+                if cap.recorded_by and rv.reviewed_by and cap.recorded_by != rv.reviewed_by
+                else "maker unknown -- four-eyes not bindable"
+                if not cap.recorded_by
+                else "unsigned"
+            )
+            maker_checker = f"recorded by {maker!r} / approved by {checker!r} ({distinct})"
         except (OSError, ValueError):
             pass
+
+    # Tamper evidence: recompute the trace hash chain.
+    if is_chained(run_dir):
+        chain = (
+            "TAMPER-EVIDENT: intact (hash chain verifies)"
+            if verify_chain(run_dir)
+            else "TAMPER-EVIDENT: BROKEN — the log was modified after the run"
+        )
+    else:
+        chain = "legacy trace (recorded before hash-chaining)"
 
     model_events = [
         e for e in events
@@ -189,6 +213,8 @@ def _explain(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
            f" Contract hash:   {run_hash}",
            f" Contract status: {status}",
            f" Risk sign-off:   {signer}",
+           f" Maker / Checker: {maker_checker}",
+           f" Audit log:       {chain}",
            f" Inputs (masked): {started.get('params', {})}",
            "", " -- Decision trace --"]
     for e in events:

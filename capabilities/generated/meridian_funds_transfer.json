@@ -705,8 +705,9 @@
     ]
   },
   "allow_unbound_checkpoint": false,
+  "recorded_by": null,
   "risk_review": {
     "reviewed_by": "ashish",
-    "artifact_hash": "7333926a7bfa1edfaa7965e2cc604e8623d78b53458ea000c64db629009562fb"
+    "artifact_hash": "797a9885632ec73008e8843043a6e5278e826c7f5f3a7345663f77d0f8ce1ed4"
   }
 }

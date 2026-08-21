@@ -433,6 +433,10 @@ class Capability(_Model):
     conditions: list[Condition] = Field(default_factory=list)
     checkpoint: Checkpoint
     allow_unbound_checkpoint: bool = False
+    # Maker identity: who recorded/authored this capability. Deliberately part
+    # of the SIGNED content (risk_hash strips only risk_review), so authorship
+    # cannot be rewritten after approval without voiding the signature.
+    recorded_by: str | None = None
     risk_review: RiskReview = Field(default_factory=RiskReview)
 
     @model_validator(mode="after")
@@ -544,6 +548,15 @@ def risk_hash(capability: Capability) -> str:
 
 
 def sign_risk_review(capability: Capability, reviewed_by: str) -> Capability:
+    """Sign the risk labels. Maker-checker (four-eyes): when the capability
+    records its author, that author may not approve their own risky steps —
+    the reviewer must be a different named operator. When authorship was not
+    recorded (legacy artifacts), the control cannot bind and signing proceeds."""
+    if capability.recorded_by is not None and reviewed_by == capability.recorded_by:
+        raise ValueError(
+            f"maker-checker violation: {reviewed_by!r} recorded this capability and "
+            "cannot approve their own risky steps; a different operator must review it"
+        )
     review = RiskReview(reviewed_by=reviewed_by, artifact_hash=risk_hash(capability))
     return capability.model_copy(update={"risk_review": review})
 

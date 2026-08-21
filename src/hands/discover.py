@@ -213,6 +213,13 @@ def discover(
         conditions=conditions,
         checkpoint=parts.checkpoint,
     )
+    import os
+
+    operator = os.environ.get("HANDS_OPERATOR")
+    if operator:
+        # Maker identity for the four-eyes control: who recorded this flow.
+        # Part of the signed content, so authorship can't be rewritten later.
+        capability = capability.model_copy(update={"recorded_by": operator})
     out_dir.mkdir(parents=True, exist_ok=True)
     artifact_path = out_dir / f"{request.name}.json"
     artifact_path.write_text(dump_capability(capability))

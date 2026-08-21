@@ -88,7 +88,15 @@ class TestIdempotency:
 
 
 def test_api_imports_no_model_code() -> None:
-    banned = ("hands.llm", "hands.planner", "hands.discover", "hands.observe",
-              "hands.recorder")
-    loaded = [m for m in banned if m in sys.modules]
-    assert not loaded, f"model code reachable from the API import graph: {loaded}"
+    """Checked in a FRESH subprocess: sys.modules in this process is polluted
+    by the discovery tests, so an in-process check would false-positive."""
+    import subprocess
+
+    code = (
+        "import sys; import hands.api; "
+        "banned = [m for m in ('hands.llm','hands.planner','hands.discover',"
+        "'hands.observe','hands.recorder') if m in sys.modules]; "
+        "sys.exit(1 if banned else 0)"
+    )
+    proc = subprocess.run([sys.executable, "-c", code], cwd=str(ARTIFACT_DIR.parent.parent))
+    assert proc.returncode == 0, "model code reachable from the API import graph"

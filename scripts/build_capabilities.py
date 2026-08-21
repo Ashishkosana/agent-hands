@@ -398,7 +398,8 @@ ARTIFACTS["meridian_place_hold"] = capability(
                  "context": [], "fingerprint": None, "fragile": False},
         "parse": {"kind": "text"}}},
     checkpoint={"all": [
-        {"kind": "role_name_visible", "role": "heading", "name": "ACCOUNT HOLD APPLIED", "context": []},
+        {"kind": "role_name_visible", "role": "heading",
+         "name": "ACCOUNT HOLD APPLIED", "context": []},
         {"kind": "region_text_matches_param", "region": "identity", "param": "member_number"},
     ]},
 )

@@ -141,15 +141,50 @@ This is **not** an asynchronous fire-and-forget handoff; it is
 **request → acknowledge → park**. The distinction is the whole safety
 property: with async handoff, "the human has control" is a *hope*; with
 acknowledge-then-park, two drivers on one session is **structurally
-impossible**, and the bound on responsiveness is one poll tick
-(≤100 ms — `_park_and_wait` sleeps `min(poll_interval_s, 0.1)`), not the
-remainder of a 30-second wait.
+impossible**.
+
+**The responsiveness bound, stated precisely** (an adversarial review of this
+document corrected an earlier, looser claim here — worth knowing exactly):
+
+```
+takeover latency  =  time to the next poll tick   +   the in-flight action
+                     (poll_interval_s = 0.25s)         type/click/select: ≤ 2s
+                                                       (attempt_timeout_ms)
+                                                       navigate: Playwright's
+                                                       30s default (no cap passed)
+```
+
+The `≤100 ms` figure belongs to the **parked** loop (`_park_and_wait` sleeps
+`min(poll_interval_s, 0.1)`) — that is how fast a parked engine reacts to an
+operator *decision*, not how fast a running engine yields control.
+
+**Where pause is NOT granted (honest coverage gaps):** the flag is polled from
+`_poll_recognizers`, which runs before every act attempt (`:375`), every
+postcondition poll (`:477`) and every checkpoint poll (`:901`) — but **not**
+from `_check_requires` or `_run_recovery`. So an operator pressing *Request
+control* during the entry-requires phase or mid-recovery waits for the engine
+to re-enter a polled loop. Neither phase can post an irreversible step
+(recovery steps are engine-authored and requires is read-only), so the safety
+invariant holds; the *interruptibility* is simply not universal. Closing that
+is two `_poll_recognizers` calls, and it is on the next-steps list rather than
+being quietly claimed as done.
 
 ## 1.5 The escalation path, step by code-level step (`replay.py`)
 
 **`_maybe_escalate()` (`:664`)** — turns a would-be `FAILURE` into an
 intervention:
 
+0. **What funnels here, exactly.** Step-loop failures, failed recoveries,
+   checkpoint-phase failures and pause requests all route through
+   `_maybe_escalate` (the `except` arms at `:270–300`). Two phases sit
+   **outside** the funnel and terminate directly: the entry-`requires` check
+   (which yields `PreconditionFailed`, a deliberately distinct result so a
+   caller is not misled by a locator error on a login page) and
+   **output extraction** (`:302`, after the loop) — an unparseable balance ends
+   the run as a `Failure` rather than asking a human to interpret a number. That
+   second one is a defensible boundary, not an oversight: a human resolving a
+   *value* would be re-introducing exactly the confident-wrong-answer risk the
+   parse spec exists to eliminate.
 1. **No human, no escalation.** If `hub is None or settings is None`
    (unattended), re-raise `_StepFailed` — attended-ness is a *runtime* posture,
    not an artifact property (`:681`).
@@ -176,12 +211,22 @@ to touch the browser:
 - On the `PAUSED → HUMAN` edge it emits `control_granted` with the operator
   identity (`:767`).
 - While `HUMAN`, it **drains the operator's command queue** and executes each
-  command **on the operator's behalf** (`_execute_human_command`, `:793`) —
-  role+name resolution across all frames, requiring **exactly one visible
-  match** or raising (`:810`), then `fill`/`click` with a 3 s timeout. This is
-  what makes handoff drivable and testable **headless** without ever violating
-  thread affinity. Typed values are recorded as
-  `text_masked_length` only (`:826`).
+  command **on the operator's behalf** (`_execute_human_command`, `:793`), then
+  `fill`/`click` with a 3 s timeout. This is what makes handoff drivable and
+  testable **headless** without ever violating thread affinity. Typed values are
+  recorded as `text_masked_length` only (`:826`).
+
+  *Precise resolution semantics (weaker than the ladder, deliberately):* it
+  walks `surface.page.frames` and takes the **first frame containing exactly
+  one visible** role+name match (`:805–812`) — per-frame uniqueness with
+  first-frame-wins, **not** the ladder's cross-frame refuse-on-ambiguity rule. A
+  frame with 2+ matches is skipped rather than raising; only the total absence
+  of any per-frame-unique match raises `SurfaceError` → traced as
+  `human_command_failed`. The justification: this channel is a *human's*
+  explicit instruction on a session they already hold, not an autonomous
+  decision — the no-guess discipline that governs replay applies to the engine
+  choosing, not to executing an operator's command. Worth stating plainly rather
+  than implying the ladder's guarantee extends here.
 - `RESOLVE` with an **undeclared** outcome code does not resolve: it emits
   `escalation_invalid_decision` and **stays parked** (`:777`). A human may only
   resolve into the artifact's closed outcome set — otherwise the caller's
@@ -306,7 +351,14 @@ HTTP request
    │      · everything else             → whitespace-trimmed only
    │
    ├─4. CREDENTIAL INJECTION    for each sensitive param: HANDS_PARAM_<NAME>
-   │      · secrets never travel in a request body or a log
+   │      · the ENVIRONMENT OVERRIDES THE BODY for every sensitive param whose
+   │        HANDS_PARAM_<NAME> is set (api.py:174-179 — `if env is not None`)
+   │      · honest bound: with that env var UNSET, a body-supplied sensitive
+   │        value is passed through verbatim; nothing rejects it. The deployment
+   │        contract is "configure the credential env vars"; a hard refusal of
+   │        body-supplied secrets is a one-line hardening on the next-steps list
+   │      · secrets are excluded from the agent-facing tool schema, and masked in
+   │        every trace, result and transcript
    │
    ├─5. SERIALIZED EXECUTION    with _INVOKE_LOCK:  engine.run(cap, params)
    │      · the engine launches its own browser for the run and closes it in
@@ -370,9 +422,20 @@ front door and provably none in the decision loop."*
 ## 3.1 The honest correction, first
 
 **This system does not scrape the hidden token, and by design should not.**
-There is no code that reads `_token`, no request interception, and no
-hand-assembled form payload. If a reviewer asks to see the scraper, the correct
-answer is:
+No code path names, reads, intercepts or reconstructs the transaction token;
+there is no request interception and no hand-assembled form payload.
+
+Grep it honestly, because a reviewer will:
+
+```bash
+rg -nw "_token" src/ tests/ scripts/ fixture/ capabilities/   # → zero matches
+rg -n  "_token" src/                                          # → only prompt_tokens /
+                                                              #   completion_tokens
+                                                              #   (LLM usage accounting)
+```
+
+The bare identifier appears **only in documentation**. If a reviewer asks to see
+the scraper, the correct answer is:
 
 > "There isn't one — and that's the design. I drive the real control, so the
 > browser serializes the form for me, hidden fields included. Scraping the
@@ -506,7 +569,55 @@ bank can *see*.
 
 ---
 
-## Appendix — the three claims to defend, and the evidence for each
+## Appendix A — honest bounds (surfaced by an adversarial review of this document)
+
+These are the limits a reviewer will find if they look, so they are stated
+first. Every one has a known mitigation; none is load-bearing for the safety
+invariants.
+
+**The operator console is unauthenticated.** It binds `127.0.0.1`
+(`escalation.py:235`) and the operator identity is a **self-asserted form
+field** with defaults (`escalation.py:275, 294–298`). Any local process could
+take control and act, and attribution is only as trustworthy as the machine.
+Production needs real authentication and per-operator identity — the same
+substitution the risk-review signing needs (attestation → per-operator keys).
+What the design *does* guarantee regardless: whoever acted is recorded, exactly
+one driver held the session, and the record is hash-chained.
+
+**The TTL keeps running through the human window.** The deadline is computed
+once at park (`replay.py:763`) and never extended, so an operator who takes
+control but does not decide within `ttl_s` has the run failed **under them**,
+mid-window. That is the deliberate direction to fail (never hold an
+authenticated banking session open indefinitely), but a production console would
+show the countdown and offer a bounded, attributed extension.
+
+**Sensitive outputs are unmasked at the API boundary — by design, with one
+caveat.** The invoke envelope serializes the real `ReplayResult`
+(`api.py:193`), so a `sensitive` output (a balance) reaches the authorized
+caller in full; masking applies to everything **persisted** (traces, dashboard,
+transcripts). The caveat worth disclosing: the in-memory idempotency cache
+retains that envelope for the process lifetime (`api.py:154, 196–197`), so a
+sensitive value lives in process memory longer than the request. A production
+store would encrypt at rest and TTL it.
+
+**Two different hashes, deliberately.** `effective_artifact_sha256` in the
+envelope (`api.py:99–101`, identical to `run_started`'s `artifact_sha256`) is
+over the **full** artifact *including* its populated `risk_review` — it answers
+"which exact bytes executed". The signature's `artifact_hash` is `risk_hash`
+(`artifact.py:548+`), computed with the hash slot blanked and the reviewer's
+identity bound in — it answers "is this approval still valid for this content".
+Conflating them in a review would be a real error: the first is attribution, the
+second is authorization.
+
+**"Tamper-evident", not tamper-proof.** The chain is keyless
+(`trace.py:5–16`): an adversary who can rewrite the whole file can recompute
+every `prev` and forge an intact-looking log, and tail truncation is
+undetectable without an external anchor. It defeats naive edits, deletions and
+reordering — which is what it claims. Mitigation: anchor the final record's hash
+outside the run directory (it already travels in the invoke envelope and the
+receipt) or key the chain with an HMAC.
+
+## Appendix B — the three claims to defend, and the evidence for each
 
 | Claim | Evidence to show |
 |---|---|

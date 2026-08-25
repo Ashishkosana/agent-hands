@@ -46,6 +46,11 @@ class FailureReport(BaseModel):
     observed: str
     screenshot_path: str | None = None
     snapshot_path: str | None = None
+    # True when a `risky` step's action was performed before this run failed.
+    # A timed-out confirmation page does not mean the transfer did not post, so
+    # "it failed" must not be read as "nothing happened": the caller has to
+    # verify state before retrying, or it double-fires the irreversible action.
+    mutation_may_have_landed: bool = False
 
 
 class Failure(BaseModel):

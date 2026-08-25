@@ -8,6 +8,8 @@ API (no model code) is asserted the same way the replay path's is.
 from __future__ import annotations
 
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -42,22 +44,30 @@ class TestCurrencySanitizer:
 
 
 class TestIdempotency:
-    def _client_with_stub(self, calls: list[dict[str, str]]) -> Any:
+    def _app_with_stub(self, calls: list[dict[str, str]], delay: float = 0.0) -> Any:
         app = create_api(gen_dir=ARTIFACT_DIR, runs_dir=Path("runs"))
         app.config["TESTING"] = True
+        lock = threading.Lock()
 
         class StubEngine:
             last_run_dir = None
 
             def run(self, cap: Any, params: dict[str, str]) -> Success:
-                calls.append(dict(params))
-                return Success(outputs={"confirmation_number": f"CN{len(calls):04d}"})
+                with lock:
+                    calls.append(dict(params))
+                    n = len(calls)
+                if delay:
+                    time.sleep(delay)  # hold the critical section open
+                return Success(outputs={"confirmation_number": f"CN{n:04d}"})
 
         # swap the real engine out from under the closure
         for cell in app.view_functions["invoke"].__closure__ or []:
             if type(cell.cell_contents).__name__ == "ReplayEngine":
                 cell.cell_contents = StubEngine()
-        return app.test_client()
+        return app
+
+    def _client_with_stub(self, calls: list[dict[str, str]]) -> Any:
+        return self._app_with_stub(calls).test_client()
 
     def test_same_key_returns_original_without_reexecuting(self) -> None:
         calls: list[dict[str, str]] = []
@@ -74,6 +84,52 @@ class TestIdempotency:
         assert second.get_json()["idempotent_replay"] is True
         assert (second.get_json()["result"]["outputs"]
                 == first.get_json()["result"]["outputs"])
+
+    def test_concurrent_duplicate_keys_still_execute_exactly_once(self) -> None:
+        """The case the key exists for: a double-click, so both requests are in
+        flight at once. Checking the key OUTSIDE the invoke lock is a
+        check-then-act race — both callers read an empty map, both pass, and
+        the lock then politely serializes two transfers instead of preventing
+        the second. Sequential retries would never catch this."""
+        calls: list[dict[str, str]] = []
+        app = self._app_with_stub(calls, delay=0.3)
+        body = {
+            "params": {"operator_id": "teller1", "member_number": "100987",
+                       "from_share": "MMKT-11", "to_share": "MMKT-5", "amount": "500"},
+            "idempotency_key": "txn-race",
+        }
+        replies: list[Any] = []
+        replies_lock = threading.Lock()
+        # Without a barrier this test degrades to a VACUOUS PASS: if thread 2
+        # happens to start after thread 1 finished, every assertion below still
+        # holds sequentially and nothing notices the overlap never happened.
+        at_the_door = threading.Barrier(2, timeout=15)
+
+        def fire() -> None:
+            at_the_door.wait()
+            response = app.test_client().post(
+                "/capabilities/meridian_funds_transfer/invoke", json=body
+            )
+            with replies_lock:
+                replies.append(response.get_json())
+
+        threads = [threading.Thread(target=fire) for _ in range(2)]
+        started = time.monotonic()
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+        elapsed = time.monotonic() - started
+
+        # One execution of 0.3s, not two back to back: proof they really did
+        # overlap rather than quietly serialising.
+        assert elapsed < 0.5, f"requests did not overlap (took {elapsed:.2f}s)"
+        assert len(calls) == 1, f"the transfer executed {len(calls)}x under concurrency"
+        assert len(replies) == 2
+        assert sum(1 for r in replies if r.get("idempotent_replay")) == 1
+        # Both callers get the SAME confirmation number — one transfer, two receipts.
+        numbers = {r["result"]["outputs"]["confirmation_number"] for r in replies}
+        assert len(numbers) == 1
 
     def test_different_keys_execute_independently(self) -> None:
         calls: list[dict[str, str]] = []

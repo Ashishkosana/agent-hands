@@ -70,6 +70,7 @@ from hands.surface import (
     PlaywrightTimeoutError,
     ResolvedTarget,
     SurfaceError,
+    TargetNotFound,
     WebSurface,
 )
 from hands.trace import Trace, new_run_dir
@@ -104,6 +105,11 @@ class EngineConfig:
     headed: bool = False
     runs_dir: Path = Path("runs")
     step_budget_s: float = 10.0
+    # A separate, much shorter budget for "the element isn't there yet". A page
+    # mid-navigation genuinely has no target for a moment, but a genuinely
+    # drifted UI must still fail FAST — spending the full step budget on every
+    # missing element turns a loud failure into a ten-second stall.
+    resolution_budget_s: float = 2.0
     requires_budget_s: float = 3.0
     poll_interval_s: float = 0.25
     attempt_timeout_ms: int = 2000
@@ -142,8 +148,25 @@ class ReplayEngine:
         self.config = config or EngineConfig()
         self._hub: EscalationHub | None = None
         self.last_run_dir: Path | None = None  # set per run; lets the API/dashboard find evidence
+        # Per-run bookkeeping the failure path needs. `_risky_acted` records
+        # that an irreversible action was performed, so a later failure can say
+        # so instead of implying nothing happened. `_blocked_mark` is the
+        # blocked-request count at the START of the current step, so an
+        # off-allowlist block can be attributed to the step it actually broke
+        # rather than to every failure that happens to follow it.
+        self._risky_acted = False
+        self._blocked_mark = 0
 
     def run(self, capability: Capability, params: dict[str, str]) -> ReplayResult:
+        # Clear per-run state FIRST, before any early return. The risk gate
+        # below returns without ever creating a run directory; leaving the
+        # previous run's `last_run_dir` in place made the caller's envelope
+        # attribute that refusal to an unrelated run — and now that the
+        # envelope also carries that run's audit-chain tip, stale state would
+        # be a false attestation an auditor could "verify" successfully.
+        self.last_run_dir = None
+        self._risky_acted = False
+        self._blocked_mark = 0
         self._validate_params(capability, params)
         # The mutating-by-default posture's teeth: risky steps do not replay
         # unattended until a human has reviewed the diffable artifact and
@@ -206,19 +229,11 @@ class ReplayEngine:
             except _Recognized as hit:
                 result = hit.outcome
             except _StepFailed as failed:
-                if surface.blocked_requests:
-                    result = PolicyViolation(
-                        rule="off_allowlist_traffic",
-                        detail=f"blocked {len(surface.blocked_requests)} request(s) outside "
-                        f"the allowlist, e.g. {surface.blocked_requests[0]}; the flow could "
-                        f"not proceed",
-                    )
-                    trace.emit("run_finished", result=_masked_result(capability, result))
-                    return result
-                # Page-content evidence is suppressed once a human has driven
-                # the session: what they entered may still sit in page state,
-                # and a screenshot/snapshot would persist it. (Element-level
-                # taint masking would refine suppression to masking.)
+                # Evidence first, and unconditionally: a run about to be
+                # reported as a policy violation is still a run someone has to
+                # debug. (Page content is suppressed only inside a human-control
+                # window: what the operator typed may still sit in page state,
+                # and a screenshot would persist it.)
                 if hub is not None and (
                     hub.state is ControlState.HUMAN or hub.human_actions
                 ):
@@ -227,7 +242,51 @@ class ReplayEngine:
                     shot, snap = surface.capture_evidence(run_dir)
                     failed.report.screenshot_path = shot
                     failed.report.snapshot_path = snap
-                result = Failure(report=failed.report)
+                # "It failed" must not be read as "nothing happened".
+                failed.report.mutation_may_have_landed = self._risky_acted
+                if self._risky_acted:
+                    trace.emit("mutation_may_have_landed", step=failed.report.step_id)
+                # Blame the allowlist only for traffic blocked DURING the step
+                # that failed. A font blocked at step 1 must not relabel an
+                # unrelated locator failure at step 9 as a policy violation.
+                blocked_here = surface.blocked_requests[self._blocked_mark :]
+                if blocked_here:
+                    result = PolicyViolation(
+                        rule="off_allowlist_traffic",
+                        detail=f"blocked {len(blocked_here)} request(s) outside the "
+                        f"allowlist while this step ran, e.g. {blocked_here[0]}; the "
+                        f"flow could not proceed",
+                    )
+                else:
+                    result = Failure(report=failed.report)
+            except (SurfaceError, PlaywrightError) as exc:
+                # Infrastructure, not flow: the browser never came up, or a
+                # surface error escaped the step loop. Report it inside the
+                # contract instead of raising out of run() and handing the
+                # caller an untyped 500 — "a caller can enumerate every code it
+                # may receive" has to stay true.
+                if surface.blocked_requests:
+                    # The allowlist killed it, most likely the entry navigation
+                    # itself. Say so: "blocked by policy" is the whole reason
+                    # this is not allowed to look like a mysterious timeout.
+                    result = PolicyViolation(
+                        rule="off_allowlist_traffic",
+                        detail=f"blocked {len(surface.blocked_requests)} request(s) outside "
+                        f"the allowlist, e.g. {surface.blocked_requests[0]}; the session "
+                        f"could not be established",
+                    )
+                    trace.emit("policy_blocked_requests", urls=surface.blocked_requests[:10])
+                else:
+                    trace.emit("surface_unavailable", error=str(exc))
+                    result = Failure(
+                        report=FailureReport(
+                            step_id=None,
+                            intent="drive the browser session",
+                            expected=f"a usable browser session at {entry_url}",
+                            observed=str(exc),
+                            mutation_may_have_landed=self._risky_acted,
+                        )
+                    )
             finally:
                 surface.stop()
                 if console is not None:
@@ -334,6 +393,9 @@ class ReplayEngine:
         armed: list[Condition],
     ) -> set[str]:
         trace.emit("step_started", step=step.id, intent=step.intent, risk=step.risk)
+        # Blocked-request watermark: anything blocked from here on belongs to
+        # THIS step, so a failure can be attributed to the allowlist honestly.
+        self._blocked_mark = len(surface.blocked_requests)
         if step.target is not None and step.target.fragile:
             trace.emit("fragile_target_warning", step=step.id)
         deadline = time.monotonic() + self.config.step_budget_s
@@ -370,6 +432,7 @@ class ReplayEngine:
         deadline: float,
     ) -> ResolvedTarget | None:
         attempts = 0
+        resolve_deadline = time.monotonic() + self.config.resolution_budget_s
         while True:
             self._refresh_suppression(capability, surface, trace, armed, suppressed)
             self._poll_recognizers(capability, surface, trace, armed, suppressed, acted=False)
@@ -387,10 +450,27 @@ class ReplayEngine:
                 return resolved
             except (SurfaceError, PlaywrightTimeoutError, PlaywrightError, ValueError_) as exc:
                 attempts += 1
-                retryable = (
-                    step.risk == "safe"
-                    and isinstance(exc, PlaywrightTimeoutError)
-                    and time.monotonic() < deadline
+                now = time.monotonic()
+                # Two different failures, two different budgets.
+                #
+                # A TIMEOUT means the action was DISPATCHED and may already
+                # have landed, so it gets the full step budget — and only it
+                # may consult the effect probe below.
+                #
+                # "0 matches" (TargetNotFound) means nothing was dispatched at
+                # all: the page may simply still be navigating. That is worth a
+                # short retry, but it must NEVER reach the effect probe — the
+                # probe's premise is "the action landed", which is false here,
+                # so a postcondition that happens to already hold would be read
+                # as proof a step worked that never ran. That is a fabricated
+                # SUCCESS on a drifted UI, straight through invariant #2.
+                #
+                # ">1 match" (TargetAmbiguous) is never retried: waiting cannot
+                # resolve ambiguity, and retrying it would erode "never guess".
+                dispatched_but_timed_out = isinstance(exc, PlaywrightTimeoutError)
+                retryable = step.risk == "safe" and (
+                    (dispatched_but_timed_out and now < deadline)
+                    or (isinstance(exc, TargetNotFound) and now < resolve_deadline)
                 )
                 trace.emit(
                     "act_attempt_failed",
@@ -402,8 +482,11 @@ class ReplayEngine:
                 if retryable:
                     # Probe for the action's effect before re-acting: if this
                     # step's (state) postconditions already hold, the action
-                    # landed and re-acting would double-fire it.
-                    if self._effect_already_present(capability, params, surface, step):
+                    # landed and re-acting would double-fire it. Gated on an
+                    # actual dispatch — see above.
+                    if dispatched_but_timed_out and self._effect_already_present(
+                        capability, params, surface, step
+                    ):
                         trace.emit("action_effect_detected", step=step.id, attempt=attempts)
                         return None
                     time.sleep(self.config.poll_interval_s)
@@ -440,6 +523,15 @@ class ReplayEngine:
         resolved: ResolvedTarget | None,
         params: dict[str, str],
     ) -> None:
+        if step.risk == "risky":
+            # Set BEFORE dispatch, never after. A click that times out may
+            # still have landed server-side — that is the whole reason this
+            # flag exists — so waiting for the call to RETURN would leave it
+            # False in exactly the case it was built for. Resolution has
+            # already succeeded by here, so nothing is claimed for a step that
+            # never found its target. Marking it in `_perform` also covers
+            # risky steps inside a condition's recovery list.
+            self._risky_acted = True
         action = step.action
         if isinstance(action, TypeAction):
             assert resolved is not None  # guaranteed by schema validator
@@ -888,6 +980,7 @@ class ReplayEngine:
     ) -> None:
         deadline = time.monotonic() + self.config.step_budget_s
         armed = list(capability.conditions)
+        self._blocked_mark = len(surface.blocked_requests)  # checkpoint owns its own traffic
         while True:
             pending = [
                 c

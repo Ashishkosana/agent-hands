@@ -70,6 +70,29 @@ class Operator:
             time.sleep(0.1)
         raise AssertionError("console never started")
 
+    def _await_event(self, event: str) -> None:
+        """Wait for the ENGINE to record that it did something, rather than
+        sleeping and hoping. A fixed sleep is not a synchronization point: hand
+        back before the operator's click has actually executed and the engine
+        resume-scans into the same blocking state, raises a SECOND intervention
+        nobody is scripted to answer, and the run dies on the TTL instead."""
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            for run_dir in self.runs_dir.glob("*"):
+                trace = run_dir / "trace.jsonl"
+                if not trace.exists():
+                    continue
+                for line in trace.read_text().splitlines():
+                    if not line.strip():
+                        continue
+                    try:
+                        if json.loads(line).get("event") == event:
+                            return
+                    except json.JSONDecodeError:
+                        continue  # a line still being written
+            time.sleep(0.05)
+        raise AssertionError(f"engine never emitted {event!r}")
+
     def _await_state(self, url: str, state: str) -> None:
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
@@ -97,6 +120,8 @@ class Operator:
                 kind = action.pop("do")
                 if kind == "await":
                     self._await_state(url, action.pop("state"))
+                elif kind == "await-event":
+                    self._await_event(action.pop("event"))
                 elif kind == "sleep":
                     time.sleep(float(action.pop("seconds")))
                 else:
@@ -120,7 +145,7 @@ def test_human_fixes_blocking_state_and_hands_back(
             {"do": "await", "state": "paused"},
             {"do": "take"},
             {"do": "act", "kind": "click", "role": "button", "name": "Continue Session"},
-            {"do": "sleep", "seconds": "0.5"},
+            {"do": "await-event", "event": "human_command_executed"},
             {"do": "handback"},
         ],
     )

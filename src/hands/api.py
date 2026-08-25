@@ -25,6 +25,7 @@ from pydantic import TypeAdapter
 from hands.artifact import Capability, dump_capability, load_capability
 from hands.replay import EngineConfig, ReplayEngine
 from hands.results import ReplayResult
+from hands.trace import chain_tip
 
 # The Playwright sync API is thread-affine and drives one browser at a time, so
 # invocations are serialized. Production would use a pool of worker processes;
@@ -163,9 +164,6 @@ def create_api(
         idem_key = str(
             body.get("idempotency_key") or request.headers.get("Idempotency-Key") or ""
         )
-        if idem_key and (name, idem_key) in completed:
-            envelope, status = completed[(name, idem_key)]
-            return jsonify({**envelope, "idempotent_replay": True}), status
 
         params: dict[str, str] = {
             k: _sanitize_value(cap, k, str(v)) for k, v in (body.get("params") or {}).items()
@@ -178,23 +176,44 @@ def create_api(
                 if env is not None:
                     params[n] = env
 
-        try:
-            with _INVOKE_LOCK:
-                result = engine.run(cap, params)
-                run_dir = engine.last_run_dir
-        except ValueError as exc:  # missing/invalid params — a caller error, not a run
-            return jsonify({"error": str(exc)}), 400
+        # The idempotency check, the execution, and the record are ONE critical
+        # section. Checking outside the lock is a check-then-act race: two
+        # concurrent requests carrying the same key both read an empty map,
+        # both pass, and the lock then politely serializes two transfers
+        # instead of preventing the second one. A duplicate is exactly the
+        # double-click this key exists to absorb, so the second caller waits
+        # for the first to finish and receives its envelope — it never executes.
+        with _INVOKE_LOCK:
+            if idem_key and (name, idem_key) in completed:
+                envelope, status = completed[(name, idem_key)]
+                return jsonify({**envelope, "idempotent_replay": True}), status
 
-        envelope = {
-            "capability": cap.name,
-            "version": cap.version,
-            "effective_artifact_sha256": _effective_hash(cap),
-            "run_dir": str(run_dir) if run_dir is not None else None,
-            "result": _RESULT_ADAPTER.dump_python(result, mode="json"),
-        }
-        status = _STATUS[result.result]
-        if idem_key:
-            completed[(name, idem_key)] = (envelope, status)
+            # ONLY engine.run is guarded here. A wider net would let an
+            # internal fault raise ValueError, get reported to the caller as a
+            # 400 "your parameters are wrong", and skip the `completed` write
+            # below — so the caller "corrects" the request, retries the same
+            # key, and re-executes a transfer that already ran.
+            try:
+                result = engine.run(cap, params)
+            except ValueError as exc:  # missing/invalid params — a caller error, not a run
+                return jsonify({"error": str(exc)}), 400
+            run_dir = engine.last_run_dir
+
+            envelope = {
+                "capability": cap.name,
+                "version": cap.version,
+                "effective_artifact_sha256": _effective_hash(cap),
+                "run_dir": str(run_dir) if run_dir is not None else None,
+                # The audit log's tip, carried OUT of the directory it
+                # protects: an auditor who kept this envelope can reconcile it
+                # against the run later via `verify_chain(dir, expected_tip=…)`.
+                "audit_chain_tip": chain_tip(run_dir) if run_dir is not None else None,
+                "result": _RESULT_ADAPTER.dump_python(result, mode="json"),
+            }
+            status = _STATUS[result.result]
+            if idem_key:
+                completed[(name, idem_key)] = (envelope, status)
+
         return jsonify(envelope), status
 
     return app

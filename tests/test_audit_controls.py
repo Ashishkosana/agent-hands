@@ -19,7 +19,7 @@ from hands.artifact import (
     risk_review_valid,
     sign_risk_review,
 )
-from hands.trace import Trace, is_chained, verify_chain
+from hands.trace import TIP_FILE, Trace, chain_tip, is_chained, is_sealed, verify_chain
 
 REPO = Path(__file__).resolve().parent.parent
 ARTIFACT = REPO / "capabilities" / "lookup_member_balance.json"
@@ -66,6 +66,84 @@ class TestTraceChain:
         lines[1], lines[2] = lines[2], lines[1]
         path.write_text("\n".join(lines) + "\n")
         assert not verify_chain(run_dir)
+
+    def test_rewritten_final_record_breaks_the_seal(self, tmp_path: Path) -> None:
+        """The chain alone cannot protect its own end: every record's hash is
+        carried by its SUCCESSOR, so the last record — the one holding the
+        run's RESULT — is pinned by nothing. Turning a failure into a success
+        here is the cheapest and most valuable forgery available, so the seal
+        has to catch it."""
+        run_dir = _write_run(tmp_path)
+        path = run_dir / "trace.jsonl"
+        lines = path.read_text().splitlines()
+        forged = json.loads(lines[-1])
+        forged["result"] = {"result": "success", "outputs": {"savings_balance": "999999.00"}}
+        lines[-1] = json.dumps(forged)  # seq and prev left untouched
+        path.write_text("\n".join(lines) + "\n")
+        assert not verify_chain(run_dir)
+
+    def test_truncated_tail_breaks_the_seal(self, tmp_path: Path) -> None:
+        """Dropping records off the end deletes its own evidence — unless the
+        record count is anchored outside the file."""
+        run_dir = _write_run(tmp_path)
+        path = run_dir / "trace.jsonl"
+        lines = path.read_text().splitlines()
+        path.write_text("\n".join(lines[:2]) + "\n")
+        assert not verify_chain(run_dir)
+
+    def test_seal_travels_out_of_the_directory_it_protects(self, tmp_path: Path) -> None:
+        """The tip is the anchor a caller keeps: it is what makes the seal
+        worth more than another line in the same file."""
+        run_dir = _write_run(tmp_path)
+        tip = chain_tip(run_dir)
+        assert tip is not None and len(tip) == 64  # a sha256 hex digest
+        assert chain_tip(tmp_path / "no-such-run") is None
+
+    def test_deleting_the_seal_is_a_reported_state_not_silent_intactness(
+        self, tmp_path: Path
+    ) -> None:
+        """The seal sits in the SAME directory as the log, so anyone who can
+        rewrite the log can delete it. Verification then degrades to the weaker
+        chain-only check — which is only acceptable because the degradation is
+        VISIBLE. `is_sealed` is what makes it visible; without it, a deleted
+        seal renders identically to an intact run."""
+        run_dir = _write_run(tmp_path)
+        assert is_sealed(run_dir)
+        (run_dir / TIP_FILE).unlink()
+        assert not is_sealed(run_dir)
+        assert verify_chain(run_dir)  # chain alone still passes — hence the state
+
+    def test_kept_receipt_catches_the_forgery_the_seal_cannot(
+        self, tmp_path: Path
+    ) -> None:
+        """Rewrite the final record AND delete the seal — both in-directory
+        defences defeated at once. Only an anchor held somewhere else can
+        catch this, which is the entire reason the tip travels in the invoke
+        envelope."""
+        run_dir = _write_run(tmp_path)
+        receipt_tip = chain_tip(run_dir)
+        assert receipt_tip is not None
+
+        path = run_dir / "trace.jsonl"
+        lines = path.read_text().splitlines()
+        forged = json.loads(lines[-1])
+        forged["result"] = {"result": "success", "outputs": {"savings_balance": "999999.00"}}
+        lines[-1] = json.dumps(forged)
+        path.write_text("\n".join(lines) + "\n")
+        (run_dir / TIP_FILE).unlink()
+
+        assert verify_chain(run_dir) is True  # in-directory checks: fully defeated
+        assert verify_chain(run_dir, expected_tip=receipt_tip) is False  # the anchor holds
+
+    def test_corrupt_seal_degrades_instead_of_exploding(self, tmp_path: Path) -> None:
+        """A non-UTF-8 seal must not raise: `verify_chain` is called by the
+        dashboard on every run it renders, so an unreadable sibling file would
+        take the page down instead of reporting a state."""
+        run_dir = _write_run(tmp_path)
+        (run_dir / TIP_FILE).write_bytes(b"\xff\xfe not utf-8 at all")
+        assert chain_tip(run_dir) is None
+        assert is_sealed(run_dir) is False
+        assert verify_chain(run_dir) is True  # reported as unsealed, not as broken
 
     def test_reopened_trace_continues_the_chain(self, tmp_path: Path) -> None:
         run_dir = _write_run(tmp_path)

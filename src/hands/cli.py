@@ -63,6 +63,12 @@ def main(argv: list[str] | None = None) -> int:
     explain_cmd.add_argument("run_id", help="a run directory name under --runs-dir")
     explain_cmd.add_argument("--runs-dir", type=Path, default=Path("runs"))
     explain_cmd.add_argument("--gen-dir", type=Path, default=Path("capabilities/generated"))
+    explain_cmd.add_argument(
+        "--expect-tip",
+        default=None,
+        help="the audit_chain_tip from the invoke envelope; reconciles the run "
+        "against an anchor held OUTSIDE the run directory",
+    )
 
     args = parser.parse_args(argv)
 
@@ -140,7 +146,7 @@ def _explain(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     import hashlib
 
     from hands.artifact import dump_capability, risk_review_valid, same_operator
-    from hands.trace import is_chained, verify_chain
+    from hands.trace import is_chained, is_sealed, verify_chain
 
     run_dir = args.runs_dir / args.run_id
     trace_file = run_dir / "trace.jsonl"
@@ -199,13 +205,26 @@ def _explain(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
         except (OSError, ValueError):
             pass
 
-    # Tamper evidence: recompute the trace hash chain.
+    # Tamper evidence: recompute the trace hash chain, and reconcile it against
+    # the anchor if the caller kept one. An UNSEALED run must not render as
+    # "intact": the seal lives beside the log, so a deleted seal and a clean
+    # run look identical to the chain check alone.
     if is_chained(run_dir):
-        chain = (
-            "TAMPER-EVIDENT: intact (hash chain verifies)"
-            if verify_chain(run_dir)
-            else "TAMPER-EVIDENT: BROKEN — the log was modified after the run"
-        )
+        ok = verify_chain(run_dir, expected_tip=args.expect_tip)
+        if not ok:
+            chain = "TAMPER-EVIDENT: BROKEN — the log was modified after the run"
+        elif args.expect_tip:
+            chain = "TAMPER-EVIDENT: intact and RECONCILED against the receipt you supplied"
+        elif is_sealed(run_dir):
+            chain = (
+                "TAMPER-EVIDENT: intact (chain + seal verify; supply --expect-tip "
+                "from the invoke envelope to rule out a rewritten seal)"
+            )
+        else:
+            chain = (
+                "TAMPER-EVIDENT: chain verifies but this run is UNSEALED — the final "
+                "record is unpinned; treat as unverified"
+            )
     else:
         chain = "legacy trace (recorded before hash-chaining)"
 

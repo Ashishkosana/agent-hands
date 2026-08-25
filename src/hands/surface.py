@@ -137,6 +137,10 @@ class WebSurface:
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
         self._page: Page | None = None
+        # Set here, not in start(): the failure path reads this even when the
+        # browser never came up, and an AttributeError while handling an error
+        # is the worst way to learn that.
+        self.blocked_requests: list[str] = []
 
     # ------------------------------------------------------------- lifecycle
 
@@ -179,7 +183,7 @@ class WebSurface:
         self._playwright = sync_playwright().start()
         self._browser = self._playwright.chromium.launch(headless=not self._headed)
         self._page = self._browser.new_page()
-        self.blocked_requests: list[str] = []
+        self.blocked_requests = []
         if allowed_hosts is not None:
             allowed = set(allowed_hosts)
 
@@ -191,10 +195,12 @@ class WebSurface:
                     self.blocked_requests.append(request.url)
                     route.abort()
 
-            # Network-layer enforcement: context-wide routing covers every
-            # request — clicks, redirects, popups, iframes, subresources —
-            # not just navigations the engine initiates itself.
-            self._page.route("**/*", enforce)
+            # Network-layer enforcement on the CONTEXT, not the page: a
+            # page-scoped hook would cover this tab's clicks, redirects,
+            # iframes and subresources, but a popup or target=_blank link
+            # opens a NEW page in the same context and would carry no handler
+            # at all — an unlogged hole straight through the allowlist.
+            self._page.context.route("**/*", enforce)
         if on_human_event is not None:
             self._page.expose_binding(
                 "__handsHumanEvent",

@@ -446,7 +446,11 @@ def native_button_inputs_named(base: Frame | Locator, name: str) -> list[Locator
         base.locator('input[type="submit"], input[type="button"], input[type="reset"]')
     ):
         try:
-            value = loc.get_attribute("value") or ""
+            # Sensors must not inherit Playwright's 30s default (and must
+            # not pass timeout=0 — that *disables* the timeout). A detaching
+            # submit (form just posted) would otherwise stall a postcondition
+            # poll for the entire default timeout.
+            value = loc.get_attribute("value", timeout=100) or ""
         except PlaywrightError:
             continue
         if " ".join(value.split()) == wanted:
@@ -461,7 +465,8 @@ def is_native_button_input(locator: Locator) -> bool:
             """el => ({
                 tag: el.tagName.toLowerCase(),
                 type: (el.getAttribute('type') || '').toLowerCase(),
-            })"""
+            })""",
+            timeout=100,
         )
     except PlaywrightError:
         return False

@@ -143,7 +143,7 @@ and the one a real discovery run produced (its transcript is in `/evidence/`).
 ## Verify the claims
 
 ```bash
-.venv/bin/pytest                      # 117 tests: schema, ladder semantics, taxonomy,
+.venv/bin/pytest                      # 124 tests: schema, ladder semantics, taxonomy,
                                       # escalation/handoff, intent gate, policy, hermetic zero-LLM proof
 .venv/bin/python evals/run_evals.py   # regenerates evals/results.md
 .venv/bin/ruff check . && .venv/bin/mypy

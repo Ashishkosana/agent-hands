@@ -37,6 +37,7 @@ from hands.artifact import (
     ValueMatchesParam,
     dump_capability,
     risk_review_valid,
+    same_operator,
 )
 from hands.conditions import (
     RecognizerHit,
@@ -53,6 +54,15 @@ from hands.escalation import (
     EscalationHub,
     HumanCommand,
     Intervention,
+)
+from hands.intent import (
+    IntentHashMismatch,
+    build_intent_payload,
+    compute_intent_hash,
+    intent_approval_required,
+    intent_prompt,
+    is_money_moving_step,
+    verify_intent_hash,
 )
 from hands.results import (
     BusinessOutcome,
@@ -93,10 +103,21 @@ class PolicySettings:
     ``allowed_hosts`` defaults to exactly the artifact's entry host; every
     request the browser makes (clicks, redirects, popups, subresources) is
     checked at the network layer. ``require_risk_review`` gates unattended
-    replay of risky steps on a human-signed, hash-bound review."""
+    replay of risky steps on a human-signed, hash-bound review.
+
+    ``require_intent_approval`` is the per-run transfer intent gate (recipe
+    review is not this-run intent). ``None`` auto-enables for money-moving
+    transfer capabilities (``meridian_funds_transfer`` and transfer-shaped
+    contracts). ``True`` enables whenever a money-moving risky step exists
+    (Fairview fixture transfers opt in this way). ``False`` disables.
+    Dual-control uses the same attestation model as maker-checker — names,
+    not cryptographic operator keys."""
 
     allowed_hosts: list[str] | None = None  # None -> derive from entry URL
     require_risk_review: bool = True
+    require_intent_approval: bool | None = None  # None = auto
+    require_intent_dual_control: bool = False
+    invoker: str | None = None  # who invoked this run; binds four-eyes when set
 
 
 @dataclass
@@ -123,6 +144,25 @@ class _StepFailed(Exception):
         self.report = report
 
 
+class _PolicyDenied(Exception):
+    """Internal control flow: a policy gate refused the run mid-flight."""
+
+    def __init__(self, violation: PolicyViolation) -> None:
+        self.violation = violation
+
+
+class _FailClosed(Exception):
+    """Terminal FAILURE that must not escalate (intent deny / TTL).
+
+    ``_StepFailed`` in attended mode becomes another intervention; an
+    operator who already denied this run's transfer must not be asked
+    again, and a TTL must close the session rather than start a new wait.
+    """
+
+    def __init__(self, report: FailureReport) -> None:
+        self.report = report
+
+
 class _PauseRequested(Exception):
     """Internal control flow: the operator asked for control mid-run."""
 
@@ -142,6 +182,8 @@ class ReplayEngine:
         self.config = config or EngineConfig()
         self._hub: EscalationHub | None = None
         self.last_run_dir: Path | None = None  # set per run; lets the API/dashboard find evidence
+        self._artifact_sha256: str = ""
+        self._run_id: str = ""
 
     def run(self, capability: Capability, params: dict[str, str]) -> ReplayResult:
         self._validate_params(capability, params)
@@ -161,8 +203,23 @@ class ReplayEngine:
                 detail="capability has risky steps and no valid signed risk review "
                 "(sign with: hands review <artifact> --operator <name>)",
             )
+        # Per-run intent gate: recipe sign-off is not this-run approval.
+        # Unattended (no console) cannot collect an approval, so fail closed
+        # before a browser is launched — the money-moving step is never reached.
+        if (
+            intent_approval_required(capability, self.config.policy.require_intent_approval)
+            and self.config.escalation is None
+        ):
+            return PolicyViolation(
+                rule="intent_approval_required",
+                detail="capability has a money-moving risky step and no operator console "
+                "(replay with --attended and approve this run's transfer intent; "
+                "unsigned intent cannot pass a money-moving step)",
+            )
         run_dir = new_run_dir(self.config.runs_dir, capability.name)
         self.last_run_dir = run_dir  # so a caller (the API/dashboard) can find this run's evidence
+        self._artifact_sha256 = hashlib.sha256(dump_capability(capability).encode()).hexdigest()
+        self._run_id = run_dir.name
         surface = WebSurface(
             headed=self.config.headed, attempt_timeout_ms=self.config.attempt_timeout_ms
         )
@@ -175,9 +232,7 @@ class ReplayEngine:
                 version=capability.version,
                 # The hash of the exact artifact that ran: every trace line is
                 # attributable to one reviewable contract.
-                artifact_sha256=hashlib.sha256(
-                    dump_capability(capability).encode()
-                ).hexdigest(),
+                artifact_sha256=self._artifact_sha256,
                 params=_masked_params(capability, params),
             )
             on_human_event = None
@@ -205,6 +260,22 @@ class ReplayEngine:
                     trace.emit("policy_blocked_requests", urls=surface.blocked_requests[:10])
             except _Recognized as hit:
                 result = hit.outcome
+            except _PolicyDenied as denied:
+                result = denied.violation
+            except _FailClosed as closed:
+                if surface.blocked_requests:
+                    result = PolicyViolation(
+                        rule="off_allowlist_traffic",
+                        detail=f"blocked {len(surface.blocked_requests)} request(s) outside "
+                        f"the allowlist, e.g. {surface.blocked_requests[0]}; the flow could "
+                        f"not proceed",
+                    )
+                    trace.emit("run_finished", result=_masked_result(capability, result))
+                    return result
+                shot, snap = surface.capture_evidence(run_dir)
+                closed.report.screenshot_path = shot
+                closed.report.snapshot_path = snap
+                result = Failure(report=closed.report)
             except _StepFailed as failed:
                 if surface.blocked_requests:
                     result = PolicyViolation(
@@ -269,7 +340,9 @@ class ReplayEngine:
                 armed = [
                     c for c in capability.conditions if step_order[c.armed_after] <= index
                 ]
-                suppressed = self._run_step(capability, params, surface, trace, step, armed)
+                suppressed = self._run_step(
+                    capability, params, surface, trace, run_dir, step, armed
+                )
                 index += 1
             except _Recover as rec:
                 try:
@@ -330,10 +403,18 @@ class ReplayEngine:
         params: dict[str, str],
         surface: WebSurface,
         trace: Trace,
+        run_dir: Path,
         step: Step,
         armed: list[Condition],
     ) -> set[str]:
         trace.emit("step_started", step=step.id, intent=step.intent, risk=step.risk)
+        if (
+            intent_approval_required(capability, self.config.policy.require_intent_approval)
+            and is_money_moving_step(step)
+        ):
+            self._require_intent_approval(
+                capability, params, surface, trace, run_dir, step
+            )
         if step.target is not None and step.target.fragile:
             trace.emit("fragile_target_warning", step=step.id)
         deadline = time.monotonic() + self.config.step_budget_s
@@ -661,6 +742,195 @@ class ReplayEngine:
             return False
         return all(post_holds(surface, c, capability, params, None) for c in step.post)
 
+    def _require_intent_approval(
+        self,
+        capability: Capability,
+        params: dict[str, str],
+        surface: WebSurface,
+        trace: Trace,
+        run_dir: Path,
+        step: Step,
+    ) -> None:
+        """Pause before a money-moving risky act and bind this run's intent.
+
+        Fail closed: no console, deny, abort, TTL, hash mismatch, or (when
+        requested) same-identity dual-control all refuse — the step never acts.
+        """
+        hub = self._hub
+        settings = self.config.escalation
+        if hub is None or settings is None:
+            raise _PolicyDenied(
+                PolicyViolation(
+                    rule="intent_approval_required",
+                    detail="unsigned intent cannot pass a money-moving step; "
+                    "replay with --attended and approve at the operator console",
+                )
+            )
+
+        payload = build_intent_payload(
+            run_id=self._run_id,
+            capability=capability,
+            artifact_sha256=self._artifact_sha256,
+            params=params,
+            step_id=step.id,
+        )
+        pending_hash = compute_intent_hash(payload)
+        prompt = intent_prompt(payload)
+        shot, _snap = surface.capture_evidence(run_dir)
+        index = _step_index(capability, step)
+        intervention = Intervention(
+            capability=capability.name,
+            version=capability.version,
+            step_id=step.id,
+            intent=step.intent,
+            reason=prompt,
+            params=_masked_params(capability, params),
+            expected="operator approval of this run's transfer intent",
+            remaining_steps=[s.intent for s in capability.steps[index:]],
+            recent_events=trace.tail(),
+            screenshot_path=shot,
+            kind="intent_approval",
+            intent_hash=pending_hash,
+            prompt=prompt,
+            run_id=self._run_id,
+            artifact_sha256=self._artifact_sha256,
+        )
+        (run_dir / "intent-approval.json").write_text(
+            json.dumps(
+                {
+                    **intervention.__dict__,
+                    "intent_payload": payload,
+                    "intent_hash": pending_hash,
+                },
+                indent=2,
+                default=str,
+            )
+        )
+        hub.park(intervention)
+        trace.emit(
+            "intent_approval_raised",
+            step=step.id,
+            intent_hash=pending_hash,
+            prompt=prompt,
+            run_id=self._run_id,
+            artifact_sha256=self._artifact_sha256,
+            member_number=payload["member_number"],
+            from_share=payload["from_share"],
+            to_share=payload["to_share"],
+            amount=payload["amount"],
+        )
+        try:
+            decision, note, _code, operator = self._park_and_wait(
+                capability, params, surface, trace, hub, settings
+            )
+        except _StepFailed as failed:
+            if "unanswered" in failed.report.observed:
+                trace.emit("intent_approval_ttl_expired", intent_hash=pending_hash)
+                raise _FailClosed(
+                    FailureReport(
+                        step_id=step.id,
+                        intent=step.intent,
+                        expected="operator approval of this run's transfer intent",
+                        observed="intent approval unanswered; transfer was not posted",
+                    )
+                ) from failed
+            raise
+
+        if decision is Decision.APPROVE:
+            live = build_intent_payload(
+                run_id=self._run_id,
+                capability=capability,
+                artifact_sha256=self._artifact_sha256,
+                params=params,
+                step_id=step.id,
+            )
+            try:
+                verify_intent_hash(live, pending_hash)
+            except IntentHashMismatch as exc:
+                hub.resume_automation()
+                trace.emit(
+                    "intent_hash_mismatch",
+                    expected=exc.expected,
+                    actual=exc.actual,
+                    operator=operator,
+                )
+                raise _PolicyDenied(
+                    PolicyViolation(
+                        rule="intent_hash_mismatch",
+                        detail="intent_hash recomputed at approval does not match the "
+                        "hash bound when the run paused; the transfer was not posted",
+                    )
+                ) from exc
+            if self.config.policy.require_intent_dual_control:
+                invoker = self.config.policy.invoker or params.get("operator_id")
+                if invoker is None:
+                    hub.resume_automation()
+                    trace.emit(
+                        "intent_dual_control_refused",
+                        operator=operator,
+                        reason="invoker unknown",
+                    )
+                    raise _PolicyDenied(
+                        PolicyViolation(
+                            rule="intent_dual_control",
+                            detail="dual control was requested but no invoker identity "
+                            "is bound (--invoker or operator_id); four-eyes cannot be proven",
+                        )
+                    )
+                if same_operator(operator, invoker):
+                    hub.resume_automation()
+                    trace.emit(
+                        "intent_dual_control_refused",
+                        operator=operator,
+                        invoker=invoker,
+                    )
+                    raise _PolicyDenied(
+                        PolicyViolation(
+                            rule="intent_dual_control",
+                            detail=f"maker-checker violation: approver {operator!r} is the "
+                            f"same identity as invoker {invoker!r}; a different operator "
+                            "must approve this run's transfer intent",
+                        )
+                    )
+            hub.resume_automation()
+            trace.emit(
+                "intent_approved",
+                operator=operator,
+                intent_hash=pending_hash,
+            )
+            return
+
+        hub.resume_automation()
+        if decision is Decision.DENY:
+            trace.emit(
+                "intent_denied", operator=operator, intent_hash=pending_hash, note=note
+            )
+            raise _FailClosed(
+                FailureReport(
+                    step_id=step.id,
+                    intent=step.intent,
+                    expected="operator approval of this run's transfer intent",
+                    observed=f"denied by operator {operator!r}; transfer was not posted",
+                )
+            )
+        # ABORT / HANDBACK / RESOLVE are not an intent approval — fail closed.
+        trace.emit(
+            "intent_denied",
+            operator=operator,
+            intent_hash=pending_hash,
+            decision=decision.value,
+            note=note,
+        )
+        raise _FailClosed(
+            FailureReport(
+                step_id=step.id,
+                intent=step.intent,
+                expected="operator approval of this run's transfer intent",
+                observed=f"intent not approved ({decision.value} by {operator!r}); "
+                "transfer was not posted",
+            )
+        )
+
     def _maybe_escalate(
         self,
         capability: Capability,
@@ -712,7 +982,7 @@ class ReplayEngine:
         decision, note, code, operator = self._park_and_wait(
             capability, params, surface, trace, hub, settings
         )
-        if decision is Decision.ABORT:
+        if decision is Decision.ABORT or decision is Decision.DENY:
             trace.emit("escalation_aborted", operator=operator, reason=note)
             raise _StepFailed(
                 FailureReport(
@@ -983,6 +1253,13 @@ class ReplayEngine:
 
         rungs = " -> ".join(describe_rung(r) for r in step.target.ladder)
         return f"a unique visible target via ladder [{rungs}]"
+
+
+def _step_index(capability: Capability, step: Step) -> int:
+    for i, candidate in enumerate(capability.steps):
+        if candidate.id == step.id:
+            return i
+    return 0
 
 
 def _masked_params(capability: Capability, params: dict[str, str]) -> dict[str, str]:

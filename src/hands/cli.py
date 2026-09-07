@@ -14,7 +14,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 from hands.artifact import load_capability
-from hands.replay import EngineConfig, EscalationSettings, ReplayEngine
+from hands.replay import EngineConfig, EscalationSettings, PolicySettings, ReplayEngine
 from hands.results import BusinessOutcome, ReplayResult, Success
 
 _RESULT_ADAPTER: TypeAdapter[ReplayResult] = TypeAdapter(ReplayResult)
@@ -42,6 +42,29 @@ def main(argv: list[str] | None = None) -> int:
     )
     replay.add_argument("--console-port", type=int, default=8321)
     replay.add_argument("--ttl", type=float, default=300.0, help="intervention TTL seconds")
+    replay.add_argument(
+        "--require-intent-approval",
+        action="store_true",
+        default=None,
+        help="require per-run intent approval before a money-moving risky step "
+        "(auto-on for meridian_funds_transfer; use this for Fairview transfers)",
+    )
+    replay.add_argument(
+        "--no-intent-approval",
+        action="store_true",
+        help="disable the transfer intent gate even for meridian_funds_transfer",
+    )
+    replay.add_argument(
+        "--intent-dual-control",
+        action="store_true",
+        help="refuse intent approval when the approver is the same identity as the invoker "
+        "(attestation four-eyes, not PKI)",
+    )
+    replay.add_argument(
+        "--invoker",
+        default=None,
+        help="identity of who invoked this run (binds dual-control when requested)",
+    )
 
     review = sub.add_parser(
         "review", help="sign a capability's risk labels after reviewing the artifact"
@@ -91,8 +114,23 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"operator console: http://127.0.0.1:{args.console_port}/", file=sys.stderr
         )
+    if args.no_intent_approval:
+        require_intent = False
+    elif args.require_intent_approval:
+        require_intent = True
+    else:
+        require_intent = None
     engine = ReplayEngine(
-        EngineConfig(headed=args.headed, runs_dir=args.runs_dir, escalation=escalation)
+        EngineConfig(
+            headed=args.headed,
+            runs_dir=args.runs_dir,
+            escalation=escalation,
+            policy=PolicySettings(
+                require_intent_approval=require_intent,
+                require_intent_dual_control=args.intent_dual_control,
+                invoker=args.invoker,
+            ),
+        )
     )
     try:
         result = engine.run(capability, params)
@@ -223,7 +261,38 @@ def _explain(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
            f" Maker / Checker: {maker_checker}",
            f" Audit log:       {chain}",
            f" Inputs (masked): {started.get('params', {})}",
-           "", " -- Decision trace --"]
+           "", " -- Transfer intent --"]
+    approved = next((e for e in events if e.get("event") == "intent_approved"), None)
+    denied = next((e for e in events if e.get("event") == "intent_denied"), None)
+    ttl = next((e for e in events if e.get("event") == "intent_approval_ttl_expired"), None)
+    raised = next((e for e in events if e.get("event") == "intent_approval_raised"), None)
+    chain_word = "intact" if "intact" in chain else ("BROKEN" if "BROKEN" in chain else "n/a")
+    if approved:
+        out.append(
+            f" Transfer intent approved by {approved.get('operator')!r}; "
+            f"intent_hash={approved.get('intent_hash')}; "
+            f"chain {chain_word}; model events={len(model_events)}"
+        )
+    elif denied:
+        out.append(
+            f" Transfer intent DENIED by {denied.get('operator')!r}; "
+            f"intent_hash={denied.get('intent_hash')}; fail closed; "
+            f"chain {chain_word}; model events={len(model_events)}"
+        )
+    elif ttl:
+        out.append(
+            f" Transfer intent unanswered (TTL); fail closed; "
+            f"intent_hash={ttl.get('intent_hash')}; "
+            f"chain {chain_word}; model events={len(model_events)}"
+        )
+    elif raised:
+        out.append(
+            f" Transfer intent requested (hash {raised.get('intent_hash')}) "
+            f"but not approved; chain {chain_word}; model events={len(model_events)}"
+        )
+    else:
+        out.append(" (no per-run intent approval on this capability)")
+    out += ["", " -- Decision trace --"]
     for e in events:
         ev = str(e.get("event", ""))
         ts = str(e.get("ts", ""))[11:23]
@@ -239,7 +308,7 @@ def _explain(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
             out.append(f"  {ts}  CHECKPOINT ok -- confirmed the right record")
         elif ev == "output_extracted":
             out.append(f"  {ts}  OUTPUT {e.get('name')} = {e.get('value')}")
-        elif ev.startswith(("escalat", "operator_", "human_", "evidence_suppressed")):
+        elif ev.startswith(("escalat", "operator_", "human_", "evidence_suppressed", "intent_")):
             out.append(f"  {ts}  [human] {ev}")
     det = "NO model in the decision loop" if not model_events else "WARNING: model events present"
     out += ["", " -- Determinism --",

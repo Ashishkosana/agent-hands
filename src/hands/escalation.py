@@ -28,6 +28,7 @@ masked lengths only, like any human keystroke.
 
 from __future__ import annotations
 
+import html
 import json
 import threading
 from dataclasses import dataclass, field
@@ -47,6 +48,7 @@ class ControlState(Enum):
 class Decision(Enum):
     NONE = "none"
     APPROVE = "approve"  # resume automation without takeover
+    DENY = "deny"  # refuse this run's intent; fail closed, no act
     HANDBACK = "handback"  # human is done; resume via forward scan
     ABORT = "abort"
     RESOLVE = "resolve"  # human established a business outcome manually
@@ -64,6 +66,13 @@ class Intervention:
     remaining_steps: list[str]
     recent_events: list[dict[str, object]]
     screenshot_path: str | None
+    # Intent-approval extras. Default kind keeps the existing failure-escalation
+    # path unchanged; the intent gate parks the same hub with kind="intent_approval".
+    kind: str = "escalation"
+    intent_hash: str | None = None
+    prompt: str | None = None
+    run_id: str | None = None
+    artifact_sha256: str | None = None
 
 
 @dataclass
@@ -125,6 +134,11 @@ class EscalationHub:
                 return False
             if decision is Decision.APPROVE and self.state is not ControlState.PAUSED:
                 return False
+            if decision is Decision.DENY and self.state not in (
+                ControlState.PAUSED,
+                ControlState.HUMAN,
+            ):
+                return False
             self.decision = decision
             self.decision_note = note
             self.resolve_code = code
@@ -183,6 +197,8 @@ _PAGE = """<!doctype html><html><head><title>hands operator console</title>
  body {{ font: 14px/1.5 -apple-system, sans-serif; margin: 2rem; max-width: 720px; }}
  h1 {{ font-size: 1.1rem; }} pre {{ background: #f4f4f4; padding: .8rem; overflow-x: auto; }}
  .state {{ font-weight: 700; text-transform: uppercase; }}
+ .prompt {{ font-size: 1.05rem; background: #fff8e1; padding: .8rem;
+  border-left: 4px solid #f9a825; }}
  form {{ display: inline-block; margin: .3rem .4rem .3rem 0; }}
  input[type=submit] {{ padding: .35rem .8rem; }}
  input[type=text] {{ padding: .3rem; }}
@@ -198,6 +214,19 @@ _PAUSED_CONTROLS = """
 <input type="submit" value="Take control"></form>
 <form method="post" action="/approve"><input type="hidden" name="operator" value="{op}">
 <input type="submit" value="Approve &amp; resume"></form>
+"""
+
+_INTENT_CONTROLS = """
+<p class="prompt"><strong>{prompt}</strong></p>
+<p>Approve binds your operator id and this run's <code>intent_hash</code> into
+the hash-chained trace. Deny (or an unanswered TTL) fails closed — the
+transfer is not posted. Identities are attestations, not cryptographic keys.</p>
+<form method="post" action="/approve">
+ <input type="text" name="operator" value="{op}" placeholder="operator id">
+ <input type="submit" value="Approve transfer"></form>
+<form method="post" action="/deny">
+ <input type="hidden" name="operator" value="{op}">
+ <input type="submit" value="Deny transfer"></form>
 """
 
 _HUMAN_CONTROLS = """
@@ -273,7 +302,16 @@ class ConsoleServer:
                     self.end_headers()
                     return
                 op = snap.get("operator") or "teller1"
-                if snap["state"] == ControlState.PAUSED.value:
+                intervention = snap.get("intervention") or {}
+                kind = intervention.get("kind") if isinstance(intervention, dict) else None
+                if (
+                    snap["state"] == ControlState.PAUSED.value
+                    and kind == "intent_approval"
+                ):
+                    raw = intervention.get("prompt") or "Approve this transfer?"
+                    prompt = html.escape(str(raw))
+                    controls = _INTENT_CONTROLS.format(op=html.escape(str(op)), prompt=prompt)
+                elif snap["state"] == ControlState.PAUSED.value:
                     controls = _PAUSED_CONTROLS.format(op=op)
                 elif snap["state"] == ControlState.HUMAN.value:
                     controls = _HUMAN_CONTROLS.format(op=op)
@@ -314,6 +352,8 @@ class ConsoleServer:
                     )
                 elif path == "/approve":
                     ok = hub.decide(Decision.APPROVE, operator)
+                elif path == "/deny":
+                    ok = hub.decide(Decision.DENY, operator, note=get("reason"))
                 elif path == "/handback":
                     ok = hub.decide(Decision.HANDBACK, operator)
                 elif path == "/abort":

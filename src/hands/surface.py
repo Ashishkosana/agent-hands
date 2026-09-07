@@ -55,6 +55,10 @@ __all__ = [
     "TargetNotFound",
     "WebSurface",
     "describe_rung",
+    "is_native_button_input",
+    "native_button_inputs_named",
+    "visible_named_role",
+    "visible_named_text",
 ]
 
 
@@ -275,11 +279,11 @@ class WebSurface:
 
     def _rung_matches(self, base: Frame | Locator, rung: Rung) -> list[Locator]:
         if isinstance(rung, RoleRung):
-            return _visible(base.get_by_role(rung.role, name=rung.name, exact=True))  # type: ignore[arg-type]
+            return visible_named_role(base, rung.role, rung.name)
         if isinstance(rung, LabelRung):
             return _visible(base.get_by_label(rung.text, exact=True))
         if isinstance(rung, TextRung):
-            return _innermost(_visible(base.get_by_text(rung.text, exact=True)))
+            return visible_named_text(base, rung.text)
         if isinstance(rung, CssRung):
             return _visible(base.locator(rung.css))
         return self._relative_matches(base, rung)
@@ -344,7 +348,17 @@ class WebSurface:
         the same role engine the ladder resolves with."""
         if fingerprint.role is not None:
             role_matches = resolved.locator.and_(frame.get_by_role(fingerprint.role))  # type: ignore[arg-type]
-            if role_matches.count() != 1:
+            try:
+                role_count = role_matches.count()
+            except PlaywrightError:
+                role_count = 0
+            # Native <input type=submit|button> is a button in the a11y tree
+            # on Chromium+Linux, but some Playwright/driver stacks (observed
+            # on Windows headed) report 0 role matches. The recorded
+            # fingerprint still holds: it is a button.
+            if role_count != 1 and not (
+                fingerprint.role == "button" and is_native_button_input(resolved.locator)
+            ):
                 raise FingerprintMismatch(
                     f"expected role {fingerprint.role!r} (via {resolved.rung})"
                 )
@@ -412,6 +426,67 @@ class WebSurface:
         except PlaywrightError:
             pass
         return screenshot_path, snapshot_path
+
+
+_NATIVE_BUTTON_INPUT_TYPES = frozenset({"submit", "button", "reset"})
+
+
+def native_button_inputs_named(base: Frame | Locator, name: str) -> list[Locator]:
+    """Visible native submit/button/reset inputs whose value equals ``name``.
+
+    Playwright ``get_by_role('button', name=...)`` treats these as buttons on
+    Chromium+Linux, but ``get_by_text`` never sees an input's ``value``, and
+    some Windows Playwright/driver stacks report 0 role matches for the same
+    markup. Matching the value attribute is exact and whitespace-normalized —
+    the same uniqueness rule as every other rung.
+    """
+    wanted = " ".join(name.split())
+    matched: list[Locator] = []
+    for loc in _visible(
+        base.locator('input[type="submit"], input[type="button"], input[type="reset"]')
+    ):
+        try:
+            # Sensors must not inherit Playwright's 30s default (and must
+            # not pass timeout=0 — that *disables* the timeout). A detaching
+            # submit (form just posted) would otherwise stall a postcondition
+            # poll for the entire default timeout.
+            value = loc.get_attribute("value", timeout=100) or ""
+        except PlaywrightError:
+            continue
+        if " ".join(value.split()) == wanted:
+            matched.append(loc)
+    return matched
+
+
+def is_native_button_input(locator: Locator) -> bool:
+    """True when ``locator`` is an ``<input type=submit|button|reset>``."""
+    try:
+        info = locator.evaluate(
+            """el => ({
+                tag: el.tagName.toLowerCase(),
+                type: (el.getAttribute('type') || '').toLowerCase(),
+            })""",
+            timeout=100,
+        )
+    except PlaywrightError:
+        return False
+    return info.get("tag") == "input" and info.get("type") in _NATIVE_BUTTON_INPUT_TYPES
+
+
+def visible_named_role(base: Frame | Locator, role: str, name: str) -> list[Locator]:
+    """Visible elements matching role+name, with native-submit fallback for buttons."""
+    matches = _visible(base.get_by_role(role, name=name, exact=True))  # type: ignore[arg-type]
+    if matches or role != "button":
+        return matches
+    return native_button_inputs_named(base, name)
+
+
+def visible_named_text(base: Frame | Locator, text: str) -> list[Locator]:
+    """Visible exact-text matches, plus native submit/button inputs by value."""
+    matches = _innermost(_visible(base.get_by_text(text, exact=True)))
+    if matches:
+        return matches
+    return native_button_inputs_named(base, text)
 
 
 def _visible(locator: Locator) -> list[Locator]:

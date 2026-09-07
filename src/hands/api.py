@@ -3,8 +3,11 @@
 An agent invokes a capability BY NAME with typed args and gets a structured
 result back, knowing nothing about the underlying UI. Each invocation runs
 deterministic replay under the hood — the engine is UNCHANGED, so the network
-allowlist, the risky-action gate, and escalation all stay intact; the wrapper
-cannot be a way around a guardrail.
+allowlist, the risky-action gate, the per-run transfer intent gate, and
+escalation all stay intact; the wrapper cannot be a way around a guardrail.
+Money-moving capabilities (`meridian_funds_transfer`) fail closed here as
+`intent_approval_required` unless the caller configures attended replay
+with an operator console — this process does not silently post funds.
 
 This module imports NO model code — the same rule the replay path lives by.
 Credentials never travel in a request body: sensitive parameters are injected

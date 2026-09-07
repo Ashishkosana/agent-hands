@@ -129,6 +129,78 @@ the typed result, and evidence.
   renders the 5-way result in plain language; a unified console embeds the
   dashboard beside the chat.
 
+## Transfer Intent Gate (per-run, not per-recipe)
+
+Artifact-level `risk_review` proves a human approved the *recipe*. Examiners
+and Sphere also need a human to approve **this run's** intent — member,
+from-share, to-share, amount, capability `name@version`, and
+`effective_artifact_sha256` — before the irreversible Post Transfer click.
+The approval hash is written into the hash-chained trace. Deny or an unanswered
+TTL fails closed: the engine never posts.
+
+The gate lives on `PolicySettings.require_intent_approval` (the same policy
+seam as `require_risk_review`) and parks the **existing** escalation hub —
+there is no second control plane. Identities are attestations (the same
+model as maker-checker). This is not PKI, HSM, or SSO.
+
+**When it fires**
+
+- **Auto-on** for `meridian_funds_transfer` (and any transfer-shaped
+  capability that declares `from_share` / `to_share` / `amount` and has a
+  risky Post Transfer step). Sign-on clicks that happen to be labelled
+  `risky` are not gated.
+- **Explicit on** for anything else that has a money-moving risky step:
+  `--require-intent-approval` (Fairview fixture transfers, when you author
+  one, opt in this way).
+- **Off:** `--no-intent-approval`.
+- Unattended (no `--attended` console) + gate on → `POLICY_VIOLATION`
+  `intent_approval_required` before a browser is launched. The API/chatbot
+  wrappers sit above the engine and cannot bypass this.
+
+**Laptop demo (MERIDIAN, live)**
+
+```bash
+# Terminal 1 is not needed — the target is already hosted.
+# Unattended transfer fails closed (unsigned this-run intent):
+hands replay capabilities/generated/meridian_funds_transfer.json \
+  --param operator_id=teller1 --param password=password \
+  --param member_number=100234 \
+  --param from_share="Share Draft (Checking)" --param to_share=S0001-3 \
+  --param amount=1
+# → policy_violation / intent_approval_required
+
+# Attended: engine runs through the review screen, then pauses.
+# Open http://127.0.0.1:8321/ — Approve or Deny.
+hands replay capabilities/generated/meridian_funds_transfer.json --attended \
+  --intent-dual-control --invoker teller1 \
+  --param operator_id=teller1 --param password=password \
+  --param member_number=100234 \
+  --param from_share="Share Draft (Checking)" --param to_share=S0001-3 \
+  --param amount=1
+# Approve as a *different* named operator (attestation four-eyes).
+# Deny or walk away (TTL) → FAILURE, Post Transfer never clicked.
+
+hands explain <run_id>
+# → Transfer intent approved by '…'; intent_hash=…; chain intact; model events=0
+```
+
+**Fairview fixture (no transfer UI in the repo fixture)**
+
+Author a transfer capability whose risky step intent/target is "Post the
+transfer", then:
+
+```bash
+.venv/bin/python -m fixture.app --port 8000
+.venv/bin/hands replay capabilities/your_fairview_transfer.json \
+  --attended --require-intent-approval \
+  --param member_id=12345 --param from_share=Savings \
+  --param to_share=Checking --param amount=10
+```
+
+`--intent-dual-control --invoker <name>` refuses when the console operator
+string-matches the invoker (case/whitespace-insensitive, same helper as
+recipe maker-checker).
+
 ## Cuts (honest)
 
 - **Session-heal is authored, not yet eval-verified** — the recognizer and
@@ -141,9 +213,10 @@ the typed result, and evidence.
 - **Multi-tenant overlays** — designed; the `HANDS_APP` catalog scoping + rung
   telemetry + drift eval are the built foundation; the overlay loader + a second
   live skin are next.
-- **Identity is attestation, not cryptography** — maker/checker names are
-  recorded and hash-bound, but per-operator signing keys are a production next
-  step (documented in `risk_hash`).
+- **Identity is attestation, not cryptography** — maker/checker names and
+  intent-gate operator/invoker strings are recorded and hash-bound, but
+  per-operator signing keys / HSM / SSO are a production next step
+  (documented in `risk_hash`). The Intent Gate does not claim PKI.
 
 ## Run it
 

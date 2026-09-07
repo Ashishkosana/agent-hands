@@ -64,9 +64,10 @@ class PreconditionFailed(BaseModel):
 
 
 class PolicyViolation(BaseModel):
-    """The guardrails stopped the run — off-allowlist traffic, or an
-    unattended replay of risky steps without a signed risk review. Distinct
-    from Failure: the flow didn't break; policy refused it."""
+    """The guardrails stopped the run — off-allowlist traffic, an
+    unattended replay of risky steps without a signed risk review, or a
+    money-moving step without a per-run intent approval. Distinct from
+    Failure: the flow didn't break; policy refused it."""
 
     result: Literal["policy_violation"] = "policy_violation"
     rule: str

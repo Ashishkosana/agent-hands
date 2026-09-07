@@ -55,9 +55,11 @@ can drive it and a reviewer can watch it. Full write-up:
 - **Chatbot console** (`chatbot/`, :8300) — plain English in, structured
   replay under the hood, live dashboard alongside.
 - **Audit controls** — hash-chained traces (`verify_chain`), maker-checker
-  four-eyes on risk sign-off, and `hands explain <run_id>` — an examiner-grade
-  audit receipt proving what ran, who approved it, and that no model was in
-  the loop.
+  four-eyes on risk sign-off, a per-run **Transfer Intent Gate** (human
+  approves *this* member / from / to / amount before Post Transfer), and
+  `hands explain <run_id>` — an examiner-grade audit receipt proving what
+  ran, who approved the recipe and the run intent, and that no model was
+  in the loop.
 
 ![The MERIDIAN console — chatbot + live trust dashboard](docs/screenshots/meridian-console.png)
 
@@ -117,6 +119,20 @@ curl -s -X POST -H "Content-Type: application/json" \
 
 # 6. Human handoff: run attended, then open http://127.0.0.1:8321/ as the operator
 .venv/bin/hands replay capabilities/lookup_member_balance.json --param member_id=12345 --attended
+
+# 7. Transfer Intent Gate (per-run approval, not recipe review)
+#    meridian_funds_transfer is ON by default — unattended replay fails closed.
+#    Fairview has no transfer UI; --require-intent-approval opts any money-moving
+#    artifact in. Approve/Deny at the console; then read the audit receipt.
+.venv/bin/hands replay capabilities/generated/meridian_funds_transfer.json \
+  --attended --intent-dual-control --invoker teller1 \
+  --param operator_id=teller1 --param password="$HANDS_PARAM_PASSWORD" \
+  --param member_number=100234 \
+  --param from_share="Share Draft (Checking)" --param to_share=S0001-3 \
+  --param amount=1
+# → operator console: Approve transfer of $1 from Share Draft (Checking) → S0001-3 for member 100234?
+.venv/bin/hands explain <run_id>
+# → Transfer intent approved by 'supervisor1'; intent_hash=…; chain intact; model events=0
 ```
 
 No key? Skip step 1 — `capabilities/` contains both a hand-written artifact

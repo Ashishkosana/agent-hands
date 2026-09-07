@@ -13,7 +13,7 @@ authors = [{ name = "Ashish Kosana", email = "ashishkosana@gmail.com" }]
 dependencies = [
     "playwright>=1.49",
     "pydantic>=2.10",
-    "openai>=1.50",  # client for any OpenAI-compatible endpoint; Groq-hosted model by default
+    "openai>=3.8.0",  # client for any OpenAI-compatible endpoint; Groq-hosted model by default
     "flask>=3.0",
 ]
 

@@ -11,7 +11,7 @@ license = { file = "LICENSE" }
 requires-python = ">=3.12"
 authors = [{ name = "Ashish Kosana", email = "ashishkosana@gmail.com" }]
 dependencies = [
-    "playwright>=1.49",
+    "playwright>=1.62.0",
     "pydantic>=2.10",
     "openai>=1.50",  # client for any OpenAI-compatible endpoint; Groq-hosted model by default
     "flask>=3.0",

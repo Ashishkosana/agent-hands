@@ -165,20 +165,30 @@ model as maker-checker). This is not PKI, HSM, or SSO.
 hands replay capabilities/generated/meridian_funds_transfer.json \
   --param operator_id=teller1 --param password=password \
   --param member_number=100234 \
-  --param from_share="Share Draft (Checking)" --param to_share=S0001-3 \
+  --param from_share="100234-S0001 - Regular Shares" --param to_share=100234-CERT-15 \
   --param amount=1
 # → policy_violation / intent_approval_required
 
 # Attended: engine runs through the review screen, then pauses.
 # Open http://127.0.0.1:8321/ — Approve or Deny.
+# Share params must be unique non-HOLD substrings. "Share Draft (Checking)"
+# matches two options (S0070 + S0070-17) and S0070 is HOLD — Continue never
+# reaches the confirm page, so the Intent Gate never opens.
 hands replay capabilities/generated/meridian_funds_transfer.json --attended \
   --intent-dual-control --invoker teller1 \
   --param operator_id=teller1 --param password=password \
   --param member_number=100234 \
-  --param from_share="Share Draft (Checking)" --param to_share=S0001-3 \
+  --param from_share="100234-S0001 - Regular Shares" --param to_share=100234-CERT-15 \
   --param amount=1
 # Approve as a *different* named operator (attestation four-eyes).
 # Deny or walk away (TTL) → FAILURE, Post Transfer never clicked.
+#
+# Continue / Post Transfer are <input type=submit> (not <button>). The engine
+# matches those as role=button / exact value, and s12/s13 keep a last-resort
+# CSS rung. Authored recoverables dismiss the nightly-batch interstitial and
+# APPLICATION ERROR ("Return to previous screen") and retry the current step.
+# A persistent core 500 on POST /transfer/review still cannot open Intent Gate
+# — there is no Post Transfer control on that error page.
 
 hands explain <run_id>
 # → Transfer intent approved by '…'; intent_hash=…; chain intact; model events=0

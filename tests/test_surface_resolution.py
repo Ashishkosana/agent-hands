@@ -11,6 +11,7 @@ from collections.abc import Iterator
 import pytest
 
 from hands.artifact import (
+    CssRung,
     Fingerprint,
     LabelRung,
     RelativeRung,
@@ -162,6 +163,116 @@ def test_password_values_never_enter_observations(surface: WebSurface) -> None:
     rendered = observation.render()
     assert "hunter2" not in rendered
     assert "«masked»" in rendered
+
+
+def test_role_button_matches_native_submit_input(surface: WebSurface) -> None:
+    # MERIDIAN (and many legacy cores) render primary actions as
+    # <input class="btn" type="submit" value="Continue">, not <button>.
+    surface.page.set_content(
+        '<form><input class="btn" type="submit" value="Continue"></form>'
+    )
+    resolved = surface.resolve(ladder(RoleRung(role="button", name="Continue")))
+    assert resolved.locator.get_attribute("type") == "submit"
+    assert resolved.locator.get_attribute("value") == "Continue"
+
+
+def test_text_rung_matches_submit_input_value(surface: WebSurface) -> None:
+    # get_by_text does not see an input's value attribute. The text rung must
+    # still resolve Continue/Post Transfer submits — live Windows replay
+    # exhausted both role and text rungs at 0 matches without this.
+    surface.page.set_content(
+        '<form><input class="btn" type="submit" value="Continue"></form>'
+    )
+    resolved = surface.resolve(ladder(TextRung(text="Continue")))
+    assert resolved.locator.evaluate("n => n.tagName") == "INPUT"
+    assert resolved.locator.get_attribute("value") == "Continue"
+
+
+def test_css_submit_satisfies_button_fingerprint(surface: WebSurface) -> None:
+    surface.page.set_content(
+        '<form><input class="btn" type="submit" value="Continue"></form>'
+    )
+    target = TargetLadder(
+        ladder=[CssRung(css='input[type="submit"][value="Continue"]')],
+        fingerprint=Fingerprint(role="button"),
+    )
+    resolved = surface.resolve(target)
+    assert resolved.locator.get_attribute("value") == "Continue"
+
+
+def test_hidden_submit_does_not_count_as_continue(surface: WebSurface) -> None:
+    surface.page.set_content(
+        '<form>'
+        '<input type="submit" value="Continue" style="display:none">'
+        '<input type="submit" value="Continue">'
+        "</form>"
+    )
+    resolved = surface.resolve(ladder(RoleRung(role="button", name="Continue")))
+    assert resolved.locator.is_visible()
+
+
+def test_two_visible_submits_same_value_is_ambiguity(surface: WebSurface) -> None:
+    surface.page.set_content(
+        '<form>'
+        '<input type="submit" value="Continue">'
+        '<input type="submit" value="Continue">'
+        "</form>"
+    )
+    with pytest.raises(TargetAmbiguous):
+        surface.resolve(ladder(RoleRung(role="button", name="Continue")))
+
+
+def test_role_name_visible_post_sees_native_submit(surface: WebSurface) -> None:
+    """s12's confirm-page post looks for a Post Transfer *button*. The live
+    control is an input[type=submit]; heading text may drift, the submit must not."""
+    from pathlib import Path
+
+    from hands.artifact import RoleNameVisible, load_capability
+    from hands.conditions import state_holds
+
+    cap = load_capability(
+        Path(__file__).resolve().parent.parent
+        / "capabilities"
+        / "generated"
+        / "meridian_funds_transfer.json"
+    )
+    surface.page.set_content(
+        '<form><input class="btn" type="submit" value="Post Transfer"></form>'
+    )
+    assert state_holds(
+        surface, RoleNameVisible(role="button", name="Post Transfer"), cap, {}
+    )
+
+
+def test_funds_transfer_continue_ladder_includes_submit_css() -> None:
+    """Authored last-resort rung: Windows headed replay could not resolve
+    Continue via role or text. CSS is last, not a disambiguator."""
+    from pathlib import Path
+
+    from hands.artifact import CssRung, load_capability
+
+    path = (
+        Path(__file__).resolve().parent.parent
+        / "capabilities"
+        / "generated"
+        / "meridian_funds_transfer.json"
+    )
+    cap = load_capability(path)
+    s12 = next(s for s in cap.steps if s.id == "s12")
+    assert s12.target is not None
+    css = [r for r in s12.target.ladder if isinstance(r, CssRung)]
+    assert css, "s12 must keep a last-resort input[type=submit][value=Continue] rung"
+    assert "submit" in css[0].css and "Continue" in css[0].css
+    # Confirm-page post must not depend only on a heading that can drift.
+    kinds = {getattr(p, "kind", None) for p in s12.post}
+    assert "region_text_matches_param" in kinds
+    assert any(
+        getattr(p, "kind", None) == "role_name_visible"
+        and getattr(p, "name", None) == "Post Transfer"
+        for p in s12.post
+    )
+    assert cap.parameters["from_share"].example == "100234-S0001 - Regular Shares"
+    assert cap.parameters["to_share"].example == "100234-CERT-15"
 
 
 def test_label_rung_is_real_association_only(surface: WebSurface) -> None:

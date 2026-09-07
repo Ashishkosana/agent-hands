@@ -10,8 +10,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from playwright.sync_api import Locator
-
 from hands.artifact import (
     Capability,
     Condition,
@@ -33,6 +31,8 @@ from hands.surface import (
     ResolvedTarget,
     SurfaceError,
     WebSurface,
+    visible_named_role,
+    visible_named_text,
 )
 from hands.values import param_value_matches, resolve_text, value_bound_in
 
@@ -70,15 +70,13 @@ def state_holds(
     try:
         if isinstance(cond, RoleNameVisible):
             frame = surface.frame_for(cond.context)
-            matches = frame.get_by_role(cond.role, name=cond.name, exact=True)  # type: ignore[arg-type]
-            return _any_visible(matches)
+            return bool(visible_named_role(frame, cond.role, cond.name))
         if isinstance(cond, RoleNameAbsent):
             frame = surface.frame_for(cond.context)
-            gone = frame.get_by_role(cond.role, name=cond.name, exact=True)  # type: ignore[arg-type]
-            return not _any_visible(gone)
+            return not bool(visible_named_role(frame, cond.role, cond.name))
         if isinstance(cond, TextVisible):
             frame = surface.frame_for(cond.context)
-            return _any_visible(frame.get_by_text(cond.text, exact=True))
+            return bool(visible_named_text(frame, cond.text))
         if isinstance(cond, UrlMatches):
             frame = surface.frame_for(cond.context)
             return re.search(cond.pattern, frame.url) is not None
@@ -163,10 +161,7 @@ def _match(
     try:
         if isinstance(condition.match, RoleNameMatch):
             frame = surface.frame_for(condition.match.context)
-            matches = frame.get_by_role(
-                condition.match.role, name=condition.match.name, exact=True  # type: ignore[arg-type]
-            )
-            if _any_visible(matches):
+            if visible_named_role(frame, condition.match.role, condition.match.name):
                 return MatchEvidence(
                     condition_id=condition.id,
                     role=condition.match.role,
@@ -199,11 +194,3 @@ def _region_text(surface: WebSurface, capability: Capability, region: str) -> st
         return container.inner_text(timeout=500)
     except (PlaywrightError, SurfaceError):
         return None
-
-
-def _any_visible(matches: Locator) -> bool:
-    try:
-        count = matches.count()
-        return any(matches.nth(i).is_visible() for i in range(count))
-    except PlaywrightError:
-        return False

@@ -43,16 +43,16 @@
     },
     "from_share": {
       "type": "string",
-      "description": "Stable substring identifying the source share, e.g. 'Share Draft (Checking)'",
+      "description": "Stable unique substring identifying the source share. 'Share Draft (Checking)' matches two options (S0070 and S0070-17) and S0070 is HOLD. Prefer '100234-S0001 - Regular Shares' (omit the live balance).",
       "sensitive": false,
-      "example": "Share Draft (Checking)",
+      "example": "100234-S0001 - Regular Shares",
       "pattern": null
     },
     "to_share": {
       "type": "string",
-      "description": "Stable substring identifying the destination share, e.g. 'S0001-3'",
+      "description": "Stable unique substring identifying the destination share. Prefer '100234-CERT-15'. Do not use a live balance.",
       "sensitive": false,
-      "example": "S0001-3",
+      "example": "100234-CERT-15",
       "pattern": null
     },
     "amount": {
@@ -158,6 +158,28 @@
       "context": [],
       "fingerprint": null,
       "fragile": false
+    },
+    "nightly_batch": {
+      "ladder": [
+        {
+          "strategy": "css",
+          "css": "body"
+        }
+      ],
+      "context": [],
+      "fingerprint": null,
+      "fragile": true
+    },
+    "application_error": {
+      "ladder": [
+        {
+          "strategy": "css",
+          "css": "body"
+        }
+      ],
+      "context": [],
+      "fingerprint": null,
+      "fragile": true
     }
   },
   "steps": [
@@ -665,6 +687,10 @@
           {
             "strategy": "text",
             "text": "Continue"
+          },
+          {
+            "strategy": "css",
+            "css": "input[type=\"submit\"][value=\"Continue\"]"
           }
         ],
         "context": [],
@@ -682,8 +708,8 @@
       "post": [
         {
           "kind": "role_name_visible",
-          "role": "heading",
-          "name": "CONFIRM FUNDS TRANSFER",
+          "role": "button",
+          "name": "Post Transfer",
           "context": []
         },
         {
@@ -710,6 +736,10 @@
           {
             "strategy": "text",
             "text": "Post Transfer"
+          },
+          {
+            "strategy": "css",
+            "css": "input[type=\"submit\"][value=\"Post Transfer\"]"
           }
         ],
         "context": [],
@@ -754,6 +784,128 @@
       "max_fires_per_run": 2,
       "provenance": "authored",
       "verified_by_eval": false
+    },
+    {
+      "id": "cond_nightly_batch",
+      "armed_after": "s8",
+      "match": {
+        "kind": "region_text",
+        "region": "nightly_batch",
+        "patterns": [
+          "temporarily unavailable while nightly batch posting completes"
+        ]
+      },
+      "classify": "recoverable",
+      "outcome_code": null,
+      "recovery": [
+        {
+          "id": "rb1",
+          "intent": "Dismiss the nightly batch interstitial",
+          "action": {
+            "kind": "click"
+          },
+          "target": {
+            "ladder": [
+              {
+                "strategy": "role",
+                "role": "button",
+                "name": "Continue"
+              },
+              {
+                "strategy": "text",
+                "text": "Continue"
+              },
+              {
+                "strategy": "css",
+                "css": "input[type=\"submit\"][value=\"Continue\"]"
+              }
+            ],
+            "context": [],
+            "fingerprint": {
+              "role": "button",
+              "editable": null
+            },
+            "fragile": false
+          },
+          "pre": [
+            {
+              "kind": "visible"
+            }
+          ],
+          "post": [
+            {
+              "kind": "text_visible",
+              "text": "From Share:",
+              "context": []
+            }
+          ],
+          "risk": "safe"
+        }
+      ],
+      "resume": "retry_current_step",
+      "restart_from": null,
+      "max_fires_per_run": 3,
+      "provenance": "authored",
+      "verified_by_eval": false
+    },
+    {
+      "id": "cond_application_error",
+      "armed_after": "s8",
+      "match": {
+        "kind": "region_text",
+        "region": "application_error",
+        "patterns": [
+          "APPLICATION ERROR"
+        ]
+      },
+      "classify": "recoverable",
+      "outcome_code": null,
+      "recovery": [
+        {
+          "id": "re1",
+          "intent": "Return from the application-error page to the transfer form",
+          "action": {
+            "kind": "click"
+          },
+          "target": {
+            "ladder": [
+              {
+                "strategy": "role",
+                "role": "link",
+                "name": "Return to previous screen"
+              },
+              {
+                "strategy": "text",
+                "text": "Return to previous screen"
+              }
+            ],
+            "context": [],
+            "fingerprint": {
+              "role": "link",
+              "editable": null
+            },
+            "fragile": false
+          },
+          "pre": [
+            {
+              "kind": "visible"
+            }
+          ],
+          "post": [
+            {
+              "kind": "text_visible",
+              "text": "From Share:",
+              "context": []
+            }
+          ],
+          "risk": "safe"
+        }
+      ],
+      "resume": "retry_current_step",
+      "restart_from": null,
+      "max_fires_per_run": 2,
+      "provenance": "authored",
+      "verified_by_eval": false
     }
   ],
   "checkpoint": {
@@ -775,6 +927,6 @@
   "recorded_by": null,
   "risk_review": {
     "reviewed_by": "ashish",
-    "artifact_hash": "382937efa8de6216ba9b2dd495c9e5828a3c6eedd72723629d80332fa9d2001e"
+    "artifact_hash": "8aab93ee7c44e6fd581c49677335ed1fee67c31605d9081e2e29ec1696c713a0"
   }
 }

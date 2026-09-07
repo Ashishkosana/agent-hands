@@ -128,9 +128,11 @@ curl -s -X POST -H "Content-Type: application/json" \
   --attended --intent-dual-control --invoker teller1 \
   --param operator_id=teller1 --param password="$HANDS_PARAM_PASSWORD" \
   --param member_number=100234 \
-  --param from_share="Share Draft (Checking)" --param to_share=S0001-3 \
+  --param from_share="100234-S0001 - Regular Shares" --param to_share=100234-CERT-15 \
   --param amount=1
-# → operator console: Approve transfer of $1 from Share Draft (Checking) → S0001-3 for member 100234?
+# → operator console: Approve transfer of $1 from 100234-S0001 - Regular Shares → 100234-CERT-15 for member 100234?
+#    Use unique non-HOLD share substrings. "Share Draft (Checking)" matches two
+#    options and S0070 is HOLD (no confirm page, Intent Gate never opens).
 .venv/bin/hands explain <run_id>
 # → Transfer intent approved by 'supervisor1'; intent_hash=…; chain intact; model events=0
 ```

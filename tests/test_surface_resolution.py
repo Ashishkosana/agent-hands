@@ -273,6 +273,11 @@ def test_funds_transfer_continue_ladder_includes_submit_css() -> None:
     )
     assert cap.parameters["from_share"].example == "100234-S0001 - Regular Shares"
     assert cap.parameters["to_share"].example == "100234-CERT-15"
+    assert {c.id for c in cap.conditions} >= {
+        "cond_nightly_batch",
+        "cond_application_error",
+        "cond_session_timeout",
+    }
 
 
 def test_label_rung_is_real_association_only(surface: WebSurface) -> None:

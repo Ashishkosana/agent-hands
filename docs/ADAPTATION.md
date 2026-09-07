@@ -185,10 +185,14 @@ hands replay capabilities/generated/meridian_funds_transfer.json --attended \
 #
 # Continue / Post Transfer are <input type=submit> (not <button>). The engine
 # matches those as role=button / exact value, and s12/s13 keep a last-resort
-# CSS rung. Authored recoverables dismiss the nightly-batch interstitial and
-# APPLICATION ERROR ("Return to previous screen") and retry the current step.
-# A persistent core 500 on POST /transfer/review still cannot open Intent Gate
-# — there is no Post Transfer control on that error page.
+# CSS rung. Live headed Windows failed s12 at 0 role/text matches; Linux
+# replay now resolves Continue via role=button and clicks it.
+#
+# Authored recoverables: nightly-batch interstitial, APPLICATION ERROR
+# ("Return to previous screen"), and YOUR SESSION HAS TIMED OUT (restart
+# from sign-on). A persistent core failure on POST /transfer/review
+# (APPLICATION ERROR / batch / session timeout — all observed live) still
+# cannot open Intent Gate: there is no Post Transfer control on those pages.
 
 hands explain <run_id>
 # → Transfer intent approved by '…'; intent_hash=…; chain intact; model events=0

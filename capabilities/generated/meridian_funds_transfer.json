@@ -180,6 +180,17 @@
       "context": [],
       "fingerprint": null,
       "fragile": true
+    },
+    "session_timeout": {
+      "ladder": [
+        {
+          "strategy": "css",
+          "css": "body"
+        }
+      ],
+      "context": [],
+      "fingerprint": null,
+      "fragile": true
     }
   },
   "steps": [
@@ -812,19 +823,21 @@
                 "name": "Continue"
               },
               {
+                "strategy": "role",
+                "role": "link",
+                "name": "Continue"
+              },
+              {
                 "strategy": "text",
                 "text": "Continue"
               },
               {
                 "strategy": "css",
-                "css": "input[type=\"submit\"][value=\"Continue\"]"
+                "css": "input[type=\"submit\"][value=\"Continue\"], a.btn"
               }
             ],
             "context": [],
-            "fingerprint": {
-              "role": "button",
-              "editable": null
-            },
+            "fingerprint": null,
             "fragile": false
           },
           "pre": [
@@ -906,6 +919,66 @@
       "max_fires_per_run": 2,
       "provenance": "authored",
       "verified_by_eval": false
+    },
+    {
+      "id": "cond_session_timeout",
+      "armed_after": "s3",
+      "match": {
+        "kind": "region_text",
+        "region": "session_timeout",
+        "patterns": [
+          "YOUR SESSION HAS TIMED OUT"
+        ]
+      },
+      "classify": "recoverable",
+      "outcome_code": null,
+      "recovery": [
+        {
+          "id": "rt1",
+          "intent": "Return to operator sign-on after session timeout",
+          "action": {
+            "kind": "click"
+          },
+          "target": {
+            "ladder": [
+              {
+                "strategy": "role",
+                "role": "link",
+                "name": "Return to Sign On"
+              },
+              {
+                "strategy": "text",
+                "text": "Return to Sign On"
+              }
+            ],
+            "context": [],
+            "fingerprint": {
+              "role": "link",
+              "editable": null
+            },
+            "fragile": false
+          },
+          "pre": [
+            {
+              "kind": "visible"
+            }
+          ],
+          "post": [
+            {
+              "kind": "role_name_visible",
+              "role": "heading",
+              "name": "OPERATOR SIGN ON",
+              "context": []
+            }
+          ],
+          "risk": "safe"
+        }
+      ],
+      "resume": "restart_from",
+      "restart_from": "s1",
+      "max_fires_per_run": 2,
+      "provenance": "authored",
+      "verified_by_eval": false
     }
   ],
   "checkpoint": {
@@ -927,6 +1000,6 @@
   "recorded_by": null,
   "risk_review": {
     "reviewed_by": "ashish",
-    "artifact_hash": "8aab93ee7c44e6fd581c49677335ed1fee67c31605d9081e2e29ec1696c713a0"
+    "artifact_hash": "57e1052af58212f33966f7e8ee69323b29b08471dfd23039fcc81c773bfc2403"
   }
 }

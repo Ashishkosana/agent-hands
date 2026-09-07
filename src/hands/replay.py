@@ -151,6 +151,18 @@ class _PolicyDenied(Exception):
         self.violation = violation
 
 
+class _FailClosed(Exception):
+    """Terminal FAILURE that must not escalate (intent deny / TTL).
+
+    ``_StepFailed`` in attended mode becomes another intervention; an
+    operator who already denied this run's transfer must not be asked
+    again, and a TTL must close the session rather than start a new wait.
+    """
+
+    def __init__(self, report: FailureReport) -> None:
+        self.report = report
+
+
 class _PauseRequested(Exception):
     """Internal control flow: the operator asked for control mid-run."""
 
@@ -250,6 +262,20 @@ class ReplayEngine:
                 result = hit.outcome
             except _PolicyDenied as denied:
                 result = denied.violation
+            except _FailClosed as closed:
+                if surface.blocked_requests:
+                    result = PolicyViolation(
+                        rule="off_allowlist_traffic",
+                        detail=f"blocked {len(surface.blocked_requests)} request(s) outside "
+                        f"the allowlist, e.g. {surface.blocked_requests[0]}; the flow could "
+                        f"not proceed",
+                    )
+                    trace.emit("run_finished", result=_masked_result(capability, result))
+                    return result
+                shot, snap = surface.capture_evidence(run_dir)
+                closed.report.screenshot_path = shot
+                closed.report.snapshot_path = snap
+                result = Failure(report=closed.report)
             except _StepFailed as failed:
                 if surface.blocked_requests:
                     result = PolicyViolation(
@@ -800,7 +826,7 @@ class ReplayEngine:
         except _StepFailed as failed:
             if "unanswered" in failed.report.observed:
                 trace.emit("intent_approval_ttl_expired", intent_hash=pending_hash)
-                raise _StepFailed(
+                raise _FailClosed(
                     FailureReport(
                         step_id=step.id,
                         intent=step.intent,
@@ -879,7 +905,7 @@ class ReplayEngine:
             trace.emit(
                 "intent_denied", operator=operator, intent_hash=pending_hash, note=note
             )
-            raise _StepFailed(
+            raise _FailClosed(
                 FailureReport(
                     step_id=step.id,
                     intent=step.intent,
@@ -895,7 +921,7 @@ class ReplayEngine:
             decision=decision.value,
             note=note,
         )
-        raise _StepFailed(
+        raise _FailClosed(
             FailureReport(
                 step_id=step.id,
                 intent=step.intent,

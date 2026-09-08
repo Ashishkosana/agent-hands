@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         default=None,
         help="require per-run intent approval before a money-moving risky step "
-        "(auto-on for meridian_funds_transfer; use this for Fairview transfers)",
+        "(auto-on for transfer-shaped capabilities including fairview_funds_transfer)",
     )
     replay.add_argument(
         "--no-intent-approval",

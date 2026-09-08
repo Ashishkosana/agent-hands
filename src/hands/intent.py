@@ -20,8 +20,10 @@ from hands.artifact import Capability, RoleRung, Step, TextRung
 
 # Closed set of capability names that default the intent gate ON. Explicit
 # PolicySettings.require_intent_approval=True enables it for any other
-# money-moving artifact (Fairview fixture transfers included).
-DEFAULT_INTENT_GATED_CAPABILITIES = frozenset({"meridian_funds_transfer"})
+# money-moving artifact.
+DEFAULT_INTENT_GATED_CAPABILITIES = frozenset(
+    {"meridian_funds_transfer", "fairview_funds_transfer"}
+)
 
 # A step is money-moving when its recorded intent or visible target names a
 # post/submit/confirm of a transfer — not a login click that happens to be
@@ -166,9 +168,10 @@ def is_transfer_capability(capability: Capability) -> bool:
 def intent_approval_required(capability: Capability, require: bool | None) -> bool:
     """Resolve the tri-state policy flag.
 
-    ``None`` (default): ON for the meridian funds-transfer path (and any
-    transfer-shaped capability). ``True``: ON whenever a money-moving risky
-    step exists (Fairview fixture transfers opt in this way). ``False``: off.
+    ``None`` (default): ON for transfer-shaped capabilities (meridian and
+    Fairview funds-transfer, and any artifact that declares from/to share +
+    amount with a money-moving risky step). ``True``: ON whenever a
+    money-moving risky step exists. ``False``: off.
     """
     if require is False:
         return False

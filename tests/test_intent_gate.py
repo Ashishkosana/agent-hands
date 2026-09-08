@@ -8,7 +8,6 @@ that an approval binds operator + intent_hash without consulting a model.
 from __future__ import annotations
 
 import json
-from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -32,14 +31,27 @@ from tests.test_escalation import Operator
 REPO = Path(__file__).resolve().parent.parent
 MERIDIAN = REPO / "capabilities" / "generated" / "meridian_funds_transfer.json"
 LOOKUP = REPO / "capabilities" / "lookup_member_balance.json"
+FAIRVIEW_TRANSFER = REPO / "capabilities" / "generated" / "fairview_funds_transfer.json"
+
+TRANSFER_PARAMS = {
+    "operator_id": "teller1",
+    "password": "password",
+    "member_id": "12345",
+    "from_share": "S1 - Savings",
+    "to_share": "S2 - Checking",
+    "amount": "1.00",
+    "memo": "intent-gate",
+}
+POST_STEP = "s14"
 
 
-def _as_money_moving(capability: Capability) -> Capability:
-    """Relabel the Fairview search-submit as a Post Transfer so the gate can
-    be exercised against the live fixture without MERIDIAN or a new UI."""
-    capability.steps[1].intent = "Post the transfer"
-    capability.steps[1].risk = "risky"
-    return capability
+def _fairview_transfer(fixture_app: str | None = None, *, sign: bool = False) -> Capability:
+    cap = load_capability(FAIRVIEW_TRANSFER)
+    if fixture_app is not None:
+        cap.target.entry.web.url = fixture_app + "/"
+    if sign:
+        return sign_risk_review(cap, "reviewer-1")
+    return cap
 
 
 def _gate_engine(
@@ -144,38 +156,42 @@ class TestGateDetection:
         assert intent_approval_required(cap, None) is True
         assert intent_approval_required(cap, False) is False
 
+    def test_fairview_post_transfer_is_money_moving(self) -> None:
+        cap = load_capability(FAIRVIEW_TRANSFER)
+        post = next(s for s in cap.steps if s.id == POST_STEP)
+        sign_on = next(s for s in cap.steps if s.id == "s4")
+        assert is_money_moving_step(post)
+        assert not is_money_moving_step(sign_on)
+        assert intent_approval_required(cap, None) is True
+        assert intent_approval_required(cap, False) is False
+
     def test_lookup_is_off_by_default(self) -> None:
         cap = load_capability(LOOKUP)
         assert intent_approval_required(cap, None) is False
         assert intent_approval_required(cap, True) is False  # no money-moving step
 
 
-def test_unattended_unsigned_intent_cannot_pass_money_step(
-    capability: Capability, tmp_path: Path
-) -> None:
+def test_unattended_unsigned_intent_cannot_pass_money_step(tmp_path: Path) -> None:
     """Signed recipe + money-moving step + no console → PolicyViolation.
     The browser is never launched; the post never happens."""
-    _as_money_moving(capability)
-    signed = sign_risk_review(capability, "reviewer-1")
-    result = _gate_engine(tmp_path, attended=False).run(signed, {"member_id": "12345"})
+    cap = _fairview_transfer(sign=True)
+    result = _gate_engine(tmp_path, attended=False).run(cap, TRANSFER_PARAMS)
     assert isinstance(result, PolicyViolation)
     assert result.rule == "intent_approval_required"
     assert not (tmp_path / "runs").exists() or not any((tmp_path / "runs").iterdir())
 
 
-def test_approve_binds_operator_and_hash_into_chain(
-    capability: Capability, fixture_app: str, tmp_path: Path
-) -> None:
-    _as_money_moving(capability)
+def test_approve_binds_operator_and_hash_into_chain(fixture_app: str, tmp_path: Path) -> None:
+    cap = _fairview_transfer(fixture_app)
     operator = Operator(
         tmp_path / "runs",
         [{"do": "await", "state": "paused"}, {"do": "approve"}],
     )
     operator.start()
-    result = _gate_engine(tmp_path).run(capability, {"member_id": "12345"})
+    result = _gate_engine(tmp_path).run(cap, TRANSFER_PARAMS)
     operator.join()
     assert isinstance(result, Success)
-    assert result.outputs == {"savings_balance": Decimal("1234.50")}
+    assert str(result.outputs["confirmation_number"]).startswith("CN-")
 
     events = _events(tmp_path)
     kinds = [e["event"] for e in events]
@@ -188,7 +204,7 @@ def test_approve_binds_operator_and_hash_into_chain(
     assert len(str(approved["intent_hash"])) == 64
     # The money step acted only AFTER approval.
     acted_idx = next(
-        i for i, e in enumerate(events) if e["event"] == "acted" and e.get("step") == "s2"
+        i for i, e in enumerate(events) if e["event"] == "acted" and e.get("step") == POST_STEP
     )
     approved_idx = next(i for i, e in enumerate(events) if e["event"] == "intent_approved")
     assert approved_idx < acted_idx
@@ -199,69 +215,57 @@ def test_approve_binds_operator_and_hash_into_chain(
     assert payload["intent_hash"] == approved["intent_hash"]
 
 
-def test_deny_fails_closed_without_acting(
-    capability: Capability, fixture_app: str, tmp_path: Path
-) -> None:
-    _as_money_moving(capability)
+def test_deny_fails_closed_without_acting(fixture_app: str, tmp_path: Path) -> None:
+    cap = _fairview_transfer(fixture_app)
     operator = Operator(
         tmp_path / "runs",
         [{"do": "await", "state": "paused"}, {"do": "deny"}],
     )
     operator.start()
-    result = _gate_engine(tmp_path).run(capability, {"member_id": "12345"})
+    result = _gate_engine(tmp_path).run(cap, TRANSFER_PARAMS)
     operator.join()
     assert isinstance(result, Failure)
     assert "denied" in result.report.observed
     events = _events(tmp_path)
     assert "intent_denied" in [e["event"] for e in events]
-    assert not any(e["event"] == "acted" and e.get("step") == "s2" for e in events)
+    assert not any(e["event"] == "acted" and e.get("step") == POST_STEP for e in events)
 
 
-def test_ttl_fails_closed_without_acting(
-    capability: Capability, fixture_app: str, tmp_path: Path
-) -> None:
-    _as_money_moving(capability)
-    result = _gate_engine(tmp_path, ttl_s=1.0).run(capability, {"member_id": "12345"})
+def test_ttl_fails_closed_without_acting(fixture_app: str, tmp_path: Path) -> None:
+    cap = _fairview_transfer(fixture_app)
+    result = _gate_engine(tmp_path, ttl_s=1.0).run(cap, TRANSFER_PARAMS)
     assert isinstance(result, Failure)
     assert "not posted" in result.report.observed
     events = _events(tmp_path)
     assert "intent_approval_ttl_expired" in [e["event"] for e in events]
-    assert not any(e["event"] == "acted" and e.get("step") == "s2" for e in events)
+    assert not any(e["event"] == "acted" and e.get("step") == POST_STEP for e in events)
 
 
-def test_dual_control_refuses_same_identity(
-    capability: Capability, fixture_app: str, tmp_path: Path
-) -> None:
+def test_dual_control_refuses_same_identity(fixture_app: str, tmp_path: Path) -> None:
     """Operator posts as teller7 (test Operator); invoker is the same name."""
-    _as_money_moving(capability)
+    cap = _fairview_transfer(fixture_app)
     operator = Operator(
         tmp_path / "runs",
         [{"do": "await", "state": "paused"}, {"do": "approve"}],
     )
     operator.start()
-    result = _gate_engine(tmp_path, dual=True, invoker="teller7").run(
-        capability, {"member_id": "12345"}
-    )
+    result = _gate_engine(tmp_path, dual=True, invoker="teller7").run(cap, TRANSFER_PARAMS)
     operator.join()
     assert isinstance(result, PolicyViolation)
     assert result.rule == "intent_dual_control"
     events = _events(tmp_path)
     assert "intent_dual_control_refused" in [e["event"] for e in events]
-    assert not any(e["event"] == "acted" and e.get("step") == "s2" for e in events)
+    assert not any(e["event"] == "acted" and e.get("step") == POST_STEP for e in events)
 
 
-def test_dual_control_allows_distinct_operator(
-    capability: Capability, fixture_app: str, tmp_path: Path
-) -> None:
-    _as_money_moving(capability)
+def test_dual_control_allows_distinct_operator(fixture_app: str, tmp_path: Path) -> None:
+    cap = _fairview_transfer(fixture_app)
     operator = Operator(
         tmp_path / "runs",
         [{"do": "await", "state": "paused"}, {"do": "approve"}],
     )
     operator.start()
-    result = _gate_engine(tmp_path, dual=True, invoker="alice").run(
-        capability, {"member_id": "12345"}
-    )
+    result = _gate_engine(tmp_path, dual=True, invoker="alice").run(cap, TRANSFER_PARAMS)
     operator.join()
     assert isinstance(result, Success)
 

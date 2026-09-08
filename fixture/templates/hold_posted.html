@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Account Hold Applied</h3>
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
+<tr>
+<td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px;" colspan="2"><b>Confirmation</b></td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C; width: 110px;">Confirmation:</td>
+<td style="font-family: 'Courier New', Courier, monospace; font-weight: bold;">{{ confirmation }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Member #</td>
+<td style="font-family: 'Courier New', Courier, monospace; font-weight: bold;">{{ member_id }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Share</td>
+<td>{{ pending.label }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Reason</td>
+<td>{{ pending.reason }}</td>
+</tr>
+</table>
+{% endblock %}

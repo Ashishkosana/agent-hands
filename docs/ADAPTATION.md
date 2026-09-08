@@ -145,13 +145,12 @@ model as maker-checker). This is not PKI, HSM, or SSO.
 
 **When it fires**
 
-- **Auto-on** for `meridian_funds_transfer` (and any transfer-shaped
-  capability that declares `from_share` / `to_share` / `amount` and has a
-  risky Post Transfer step). Sign-on clicks that happen to be labelled
+- **Auto-on** for `meridian_funds_transfer` and `fairview_funds_transfer` (and any
+  transfer-shaped capability that declares `from_share` / `to_share` / `amount`
+  and has a risky Post Transfer step). Sign-on clicks that happen to be labelled
   `risky` are not gated.
 - **Explicit on** for anything else that has a money-moving risky step:
-  `--require-intent-approval` (Fairview fixture transfers, when you author
-  one, opt in this way).
+  `--require-intent-approval`.
 - **Off:** `--no-intent-approval`.
 - Unattended (no `--attended` console) + gate on → `POLICY_VIOLATION`
   `intent_approval_required` before a browser is launched. The API/chatbot
@@ -198,22 +197,57 @@ hands explain <run_id>
 # → Transfer intent approved by '…'; intent_hash=…; chain intact; model events=0
 ```
 
-**Fairview fixture (no transfer UI in the repo fixture)**
+**Fairview fixture (Adaptation-parity demo when MERIDIAN is unavailable)**
 
-Author a transfer capability whose risky step intent/target is "Post the
-transfer", then:
+The take-home Fairview Teller Console (`fixture/`, `:8000`) now covers the same
+7-function surface. MERIDIAN live is a separate hosted target — this write-up
+does not claim it is up. Operators: `teller1` / `password` (teller),
+`super1` / `password` (supervisor). Members are fake (e.g. `12345` Pat Ruiz).
+
+| Function | Artifact |
+|---|---|
+| Sign on / session | `fairview_sign_on` |
+| Member inquiry (last name) | `fairview_member_inquiry` |
+| Member record / balance | `fairview_member_balance` (ID search; original no-login `lookup_member_balance` still works) |
+| Funds transfer | `fairview_funds_transfer` — review → **Post Transfer** (Intent Gate auto-on) |
+| Open new share | `fairview_open_new_share` |
+| Update contact | `fairview_update_contact` |
+| Account hold | `fairview_place_hold` — teller → `SUPERVISOR_REQUIRED`; super1 → success |
 
 ```bash
 .venv/bin/python -m fixture.app --port 8000
-.venv/bin/hands replay capabilities/your_fairview_transfer.json \
-  --attended --require-intent-approval \
-  --param member_id=12345 --param from_share=Savings \
-  --param to_share=Checking --param amount=10
+
+# Unattended transfer fails closed (unsigned this-run intent):
+.venv/bin/hands replay capabilities/generated/fairview_funds_transfer.json \
+  --param operator_id=teller1 --param password=password \
+  --param member_id=12345 \
+  --param from_share="S1 - Savings" --param to_share="S2 - Checking" \
+  --param amount=1.00 --param memo="demo"
+# → policy_violation / intent_approval_required
+
+# Attended: engine pauses on Post Transfer. Open http://127.0.0.1:8321/
+.venv/bin/hands replay capabilities/generated/fairview_funds_transfer.json --attended \
+  --intent-dual-control --invoker teller1 \
+  --param operator_id=teller1 --param password=password \
+  --param member_id=12345 \
+  --param from_share="S1 - Savings" --param to_share="S2 - Checking" \
+  --param amount=1.00 --param memo="demo"
+# Approve as a *different* named operator. Deny or TTL → FAILURE, no post.
+
+# Scripted Approve that writes runs/ for the trust dashboard:
+.venv/bin/python scripts/demo_fairview_intent_gate.py
+HANDS_APP=fairview-teller python -m dashboard.app --port 8200
 ```
 
 `--intent-dual-control --invoker <name>` refuses when the console operator
 string-matches the invoker (case/whitespace-insensitive, same helper as
 recipe maker-checker).
+
+Regenerate Fairview artifacts after fixture/locator edits:
+
+```bash
+.venv/bin/python scripts/build_fairview_capabilities.py
+```
 
 ## Cuts (honest)
 

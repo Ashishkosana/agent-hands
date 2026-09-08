@@ -16,9 +16,27 @@ b { color: #8FA5BC; font-size: 10px; letter-spacing: 1.8px; }
 <tr>
 <td bgcolor="#0E2337" style="background: #0E2337; border-bottom: 2px solid #C9A227; padding: 8px 12px;"><font color="#8FA5BC" size="2"><b>MENU</b></font></td>
 </tr>
+{% if signed_on %}
+<tr>
+<td style="padding: 8px 12px;"><font size="1" color="#8FA5BC" style="color: #8FA5BC; font-size: 10px;">SIGNED ON</font><br><font size="2">{{ operator_id }} / {{ role }}</font></td>
+</tr>
+<tr>
+<td style="padding: 8px 12px;"><font size="2"><a href="/menu" target="main">Teller Menu</a></font></td>
+</tr>
 <tr>
 <td style="padding: 8px 12px;"><font size="2"><a href="/search" target="main">Member Search</a></font></td>
 </tr>
+<tr>
+<td style="padding: 8px 12px;"><font size="2"><a href="/signoff" target="main">Sign Off</a></font></td>
+</tr>
+{% else %}
+<tr>
+<td style="padding: 8px 12px;"><font size="2"><a href="/signon" target="main">Sign On</a></font></td>
+</tr>
+<tr>
+<td style="padding: 8px 12px;"><font size="2"><a href="/search" target="main">Member Search</a></font></td>
+</tr>
+{% endif %}
 <tr>
 <td style="padding: 8px 12px;"><font size="2"><a href="/reports" target="main">Reports</a></font></td>
 </tr>

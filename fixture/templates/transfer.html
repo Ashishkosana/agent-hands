@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Funds Transfer</h3>
+{% if err %}
+<h3>Transaction Rejected</h3>
+{% endif %}
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C; width: 110px;">Member #</td>
+<td style="font-family: 'Courier New', Courier, monospace; font-weight: bold;">{{ member_id }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Name</td>
+<td>{{ member.name }}</td>
+</tr>
+</table>
+<br>
+<form method="post" action="/member/{{ member_id }}/transfer/review">
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
+<tr>
+<td colspan="2" bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px;"><b>Transfer</b></td>
+</tr>
+<tr>
+<td bgcolor="#F4F7FA" style="background: #F4F7FA; color: #33475C; width: 110px;">From Share</td>
+<td>
+<select name="f1">
+<option value=""></option>
+{% for code, label in shares %}
+<option value="{{ code }}">{{ label }}</option>
+{% endfor %}
+</select>
+</td>
+</tr>
+<tr>
+<td bgcolor="#F4F7FA" style="background: #F4F7FA; color: #33475C;">To Share</td>
+<td>
+<select name="f2">
+<option value=""></option>
+{% for code, label in shares %}
+<option value="{{ code }}">{{ label }}</option>
+{% endfor %}
+</select>
+</td>
+</tr>
+<tr>
+<td bgcolor="#F4F7FA" style="background: #F4F7FA; color: #33475C;">Amount</td>
+<td><input name="f3" size="12"></td>
+</tr>
+<tr>
+<td bgcolor="#F4F7FA" style="background: #F4F7FA; color: #33475C;">Memo</td>
+<td><input name="f4" size="24"></td>
+</tr>
+<tr>
+<td bgcolor="#F4F7FA" style="background: #F4F7FA;">&nbsp;</td>
+<td><input type="submit" value="Continue"></td>
+</tr>
+</table>
+</form>
+{% if err %}
+<br>
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#C08484" bgcolor="#FFFFFF" style="border: 1px solid #C08484; border-left: 4px solid #A33A3A; min-width: 340px;">
+<tr>
+<td bgcolor="#F3DCDC" style="background: #F3DCDC; border-bottom: 1px solid #C08484; padding: 6px 10px;"><b style="color: #7C2B2B;">Validation</b></td>
+</tr>
+<tr>
+<td style="color: #5A2626;">{{ err }}</td>
+</tr>
+</table>
+{% endif %}
+{% endblock %}

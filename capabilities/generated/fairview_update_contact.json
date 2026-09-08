@@ -1,0 +1,830 @@
+{
+  "schema_version": 1,
+  "name": "fairview_update_contact",
+  "version": 1,
+  "description": "Sign on, open a member's record, and update their e-mail, phone, and mailing address.",
+  "target": {
+    "app": "fairview-teller",
+    "entry": {
+      "web": {
+        "url": "http://127.0.0.1:8000/"
+      }
+    }
+  },
+  "requires": [
+    {
+      "kind": "role_name_visible",
+      "role": "heading",
+      "name": "Fairview Teller Console",
+      "context": [
+        {
+          "name": "main",
+          "url_pattern": null,
+          "ordinal": null
+        }
+      ]
+    }
+  ],
+  "parameters": {
+    "operator_id": {
+      "type": "string",
+      "description": "Operator sign-on ID",
+      "sensitive": false,
+      "example": "teller1",
+      "pattern": "[a-zA-Z0-9_]{1,32}"
+    },
+    "password": {
+      "type": "string",
+      "description": "Operator password",
+      "sensitive": true,
+      "example": null,
+      "pattern": null
+    },
+    "member_id": {
+      "type": "string",
+      "description": "Member number as printed on statements",
+      "sensitive": false,
+      "example": "12345",
+      "pattern": "[0-9]{1,10}"
+    },
+    "email": {
+      "type": "string",
+      "description": "New e-mail address",
+      "sensitive": false,
+      "example": "pat.ruiz@example.net",
+      "pattern": "[^@\\s]+@[^@\\s]+\\.[^@\\s]+"
+    },
+    "phone": {
+      "type": "string",
+      "description": "New phone number",
+      "sensitive": false,
+      "example": "555-0199",
+      "pattern": "[0-9() +.-]{7,20}"
+    },
+    "address": {
+      "type": "string",
+      "description": "New mailing address",
+      "sensitive": false,
+      "example": "99 Test Ave, Fairview",
+      "pattern": null
+    }
+  },
+  "outcomes": {
+    "MEMBER_NOT_FOUND": {
+      "description": "No member exists with this ID."
+    },
+    "SIGNON_FAILED": {
+      "description": "Operator ID or password was rejected."
+    }
+  },
+  "outputs": {},
+  "regions": {
+    "identity": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "anchor": {
+            "strategy": "text",
+            "text": "MEMBER INFORMATION UPDATED"
+          },
+          "container": "table"
+        }
+      ],
+      "context": [
+        {
+          "name": "main",
+          "url_pattern": null,
+          "ordinal": null
+        }
+      ],
+      "fingerprint": null,
+      "fragile": false
+    },
+    "results": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "anchor": {
+            "strategy": "text",
+            "text": "Search Results"
+          },
+          "container": "table"
+        }
+      ],
+      "context": [
+        {
+          "name": "main",
+          "url_pattern": null,
+          "ordinal": null
+        }
+      ],
+      "fingerprint": null,
+      "fragile": false
+    },
+    "signon_error": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "anchor": {
+            "strategy": "text",
+            "text": "Sign-on failed"
+          },
+          "container": "table"
+        }
+      ],
+      "context": [
+        {
+          "name": "main",
+          "url_pattern": null,
+          "ordinal": null
+        }
+      ],
+      "fingerprint": null,
+      "fragile": false
+    }
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Open the sign-on form",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "link",
+            "name": "Sign On"
+          },
+          {
+            "strategy": "text",
+            "text": "Sign On"
+          }
+        ],
+        "context": [
+          {
+            "name": "nav",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "link",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Operator Sign On",
+          "context": [
+            {
+              "name": "main",
+              "url_pattern": null,
+              "ordinal": null
+            }
+          ]
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s2",
+      "intent": "Enter the operator ID",
+      "action": {
+        "kind": "type",
+        "text": "{param:operator_id}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "label",
+            "text": "Operator ID"
+          },
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Operator ID"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "operator_id",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s3",
+      "intent": "Enter the password",
+      "action": {
+        "kind": "type",
+        "text": "{param:password}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "label",
+            "text": "Password"
+          },
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Password"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "password",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s4",
+      "intent": "Click Sign On",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "button",
+            "name": "Sign On"
+          },
+          {
+            "strategy": "text",
+            "text": "Sign On"
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "button",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Teller Menu",
+          "context": [
+            {
+              "name": "main",
+              "url_pattern": null,
+              "ordinal": null
+            }
+          ]
+        }
+      ],
+      "risk": "risky"
+    },
+    {
+      "id": "s5",
+      "intent": "Open member inquiry",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "link",
+            "name": "Member Inquiry"
+          },
+          {
+            "strategy": "text",
+            "text": "Member Inquiry"
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "link",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Member Inquiry",
+          "context": [
+            {
+              "name": "main",
+              "url_pattern": null,
+              "ordinal": null
+            }
+          ]
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s6",
+      "intent": "Enter the member ID",
+      "action": {
+        "kind": "type",
+        "text": "{param:member_id}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "label",
+            "text": "Member ID"
+          },
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Member ID"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "member_id",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s7",
+      "intent": "Submit the member search",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "button",
+            "name": "Search"
+          },
+          {
+            "strategy": "text",
+            "text": "Search"
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "button",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Member Details",
+          "context": [
+            {
+              "name": "main",
+              "url_pattern": null,
+              "ordinal": null
+            }
+          ]
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s8",
+      "intent": "Open the Update Member Information form",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "link",
+            "name": "Update Member Information"
+          },
+          {
+            "strategy": "text",
+            "text": "Update Member Information"
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "link",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Update Member Information",
+          "context": [
+            {
+              "name": "main",
+              "url_pattern": null,
+              "ordinal": null
+            }
+          ]
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s9",
+      "intent": "Enter the new e-mail",
+      "action": {
+        "kind": "type",
+        "text": "{param:email}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "label",
+            "text": "E-mail"
+          },
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "E-mail"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "email",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s10",
+      "intent": "Enter the new phone",
+      "action": {
+        "kind": "type",
+        "text": "{param:phone}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "label",
+            "text": "Phone"
+          },
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Phone"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "phone",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s11",
+      "intent": "Enter the new mailing address",
+      "action": {
+        "kind": "type",
+        "text": "{param:address}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "label",
+            "text": "Mailing Address"
+          },
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Mailing Address"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "address",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s12",
+      "intent": "Save the updated contact details",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "button",
+            "name": "Save Changes"
+          },
+          {
+            "strategy": "text",
+            "text": "Save Changes"
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "button",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Member Information Updated",
+          "context": [
+            {
+              "name": "main",
+              "url_pattern": null,
+              "ordinal": null
+            }
+          ]
+        }
+      ],
+      "risk": "risky"
+    }
+  ],
+  "conditions": [
+    {
+      "id": "signon_failed",
+      "armed_after": "s4",
+      "match": {
+        "kind": "region_text",
+        "region": "signon_error",
+        "patterns": [
+          "Operator ID or password is not recognized"
+        ]
+      },
+      "classify": "business_outcome",
+      "outcome_code": "SIGNON_FAILED",
+      "recovery": [],
+      "resume": null,
+      "restart_from": null,
+      "max_fires_per_run": 2,
+      "provenance": "authored",
+      "verified_by_eval": false
+    },
+    {
+      "id": "not_found",
+      "armed_after": "s7",
+      "match": {
+        "kind": "region_text",
+        "region": "results",
+        "patterns": [
+          "No member matches"
+        ]
+      },
+      "classify": "business_outcome",
+      "outcome_code": "MEMBER_NOT_FOUND",
+      "recovery": [],
+      "resume": null,
+      "restart_from": null,
+      "max_fires_per_run": 2,
+      "provenance": "authored",
+      "verified_by_eval": false
+    }
+  ],
+  "checkpoint": {
+    "all": [
+      {
+        "kind": "role_name_visible",
+        "role": "heading",
+        "name": "Member Information Updated",
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ]
+      },
+      {
+        "kind": "region_text_matches_param",
+        "region": "identity",
+        "param": "member_id"
+      }
+    ]
+  },
+  "allow_unbound_checkpoint": false,
+  "recorded_by": null,
+  "risk_review": {
+    "reviewed_by": "ashish",
+    "artifact_hash": "03a1c3aaaca5fc3ae56f67e40e3a2590916e9380145515ba49d82054dc2a90e3"
+  }
+}

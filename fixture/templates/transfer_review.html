@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Transfer Review</h3>
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C; width: 110px;">Member #</td>
+<td style="font-family: 'Courier New', Courier, monospace; font-weight: bold;">{{ member_id }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Name</td>
+<td>{{ member.name }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">From</td>
+<td>{{ pending.from_label }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">To</td>
+<td>{{ pending.to_label }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Amount</td>
+<td style="font-family: 'Courier New', Courier, monospace;">{{ amount_fmt }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Memo</td>
+<td>{{ pending.memo or "—" }}</td>
+</tr>
+</table>
+<br>
+<table border="0" cellpadding="4" cellspacing="0">
+<tr>
+<td>
+<form method="post" action="/member/{{ member_id }}/transfer/post">
+<input type="submit" value="Post Transfer">
+</form>
+</td>
+</tr>
+</table>
+<p><font size="2" style="font-size: 11px; color: #52606D;">Posting is irreversible.</font></p>
+{% endblock %}

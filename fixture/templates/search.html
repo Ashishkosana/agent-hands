@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+<h3>Member Inquiry</h3>
 <table border="0" cellpadding="4" cellspacing="0">
 <tr>
 <td>
@@ -13,6 +14,10 @@
 <td><input name="q1" size="20"></td>
 </tr>
 <tr>
+<td bgcolor="#F4F7FA" style="background: #F4F7FA; color: #33475C;">Last Name</td>
+<td><input name="q2" size="20"></td>
+</tr>
+<tr>
 <td bgcolor="#F4F7FA" style="background: #F4F7FA;">&nbsp;</td>
 <td><input type="submit" value="Search"></td>
 </tr>
@@ -21,7 +26,7 @@
 </td>
 </tr>
 <tr>
-<td style="padding-top: 8px;"><font size="2" style="font-size: 11px; color: #52606D;">Tip: if no member matches, verify the ID.</font></td>
+<td style="padding-top: 8px;"><font size="2" style="font-size: 11px; color: #52606D;">Tip: search by member ID or last name.</font></td>
 </tr>
 </table>
 {% if err %}
@@ -42,8 +47,25 @@
 <td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px;"><b>Search Results</b></td>
 </tr>
 <tr>
-<td>No member matches ID {{ q }}.</td>
+<td>{% if by_name %}No member matches last name {{ q }}.{% else %}No member matches ID {{ q }}.{% endif %}</td>
 </tr>
+</table>
+{% endif %}
+{% if matches %}
+<br>
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
+<tr>
+<td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px;"><b>Search Results</b></td>
+<td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px;"><b>Name</b></td>
+<td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px;">&nbsp;</td>
+</tr>
+{% for mid, name in matches %}
+<tr>
+<td>{{ mid }}</td>
+<td>{{ name }}</td>
+<td><a href="/member/{{ mid }}">Select</a></td>
+</tr>
+{% endfor %}
 </table>
 {% endif %}
 {% endblock %}

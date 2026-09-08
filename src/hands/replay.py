@@ -108,8 +108,8 @@ class PolicySettings:
     ``require_intent_approval`` is the per-run transfer intent gate (recipe
     review is not this-run intent). ``None`` auto-enables for money-moving
     transfer capabilities (``meridian_funds_transfer`` and transfer-shaped
-    contracts). ``True`` enables whenever a money-moving risky step exists
-    (Fairview fixture transfers opt in this way). ``False`` disables.
+    contracts). ``True`` enables whenever a money-moving risky step exists.
+    ``False`` disables.
     Dual-control uses the same attestation model as maker-checker — names,
     not cryptographic operator keys."""
 

@@ -8,20 +8,64 @@
 </tr>
 <tr>
 <td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Name</td>
-<td>{{ name }}</td>
+<td>{{ member.name }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Status</td>
+<td>{{ member.status }}</td>
 </tr>
 </table>
 <br>
 <table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
 <tr>
-<td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px; width: 200px;"><b>Account</b></td>
-<td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px; width: 140px;" align="right"><b>Balance</b></td>
+<td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px; width: 140px;"><b>Account</b></td>
+<td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px; width: 120px;" align="right"><b>Balance</b></td>
+<td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px; width: 70px;"><b>Share</b></td>
+<td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px; width: 80px;"><b>Status</b></td>
 </tr>
-{% for label, balance in accounts %}
+{% for label, balance, share, status in accounts %}
 <tr>
 <td>{{ label }}</td>
 <td align="right" style="font-family: 'Courier New', Courier, monospace;">{{ balance }}</td>
+<td style="font-family: 'Courier New', Courier, monospace;">{{ share }}</td>
+<td>{{ status }}</td>
 </tr>
 {% endfor %}
+</table>
+<br>
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
+<tr>
+<td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px;" colspan="2"><b>Contact</b></td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C; width: 110px;">E-mail</td>
+<td>{{ member.email }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Phone</td>
+<td>{{ member.phone }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Mailing Address</td>
+<td>{{ member.address }}</td>
+</tr>
+</table>
+<br>
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
+<tr>
+<td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px;"><b>ACTIONS</b></td>
+</tr>
+<tr>
+<td><a href="/member/{{ member_id }}/transfer">Funds Transfer</a></td>
+</tr>
+<tr>
+<td><a href="/member/{{ member_id }}/share">Open New Share</a></td>
+</tr>
+<tr>
+<td><a href="/member/{{ member_id }}/contact">Update Member Information</a></td>
+</tr>
+<tr>
+<td><a href="/member/{{ member_id }}/hold">Place Account Hold</a></td>
+</tr>
 </table>
 {% endblock %}

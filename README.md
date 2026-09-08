@@ -121,21 +121,30 @@ curl -s -X POST -H "Content-Type: application/json" \
 .venv/bin/hands replay capabilities/lookup_member_balance.json --param member_id=12345 --attended
 
 # 7. Transfer Intent Gate (per-run approval, not recipe review)
-#    meridian_funds_transfer is ON by default — unattended replay fails closed.
-#    Fairview has no transfer UI; --require-intent-approval opts any money-moving
-#    artifact in. Approve/Deny at the console; then read the audit receipt.
-.venv/bin/hands replay capabilities/generated/meridian_funds_transfer.json \
+#    fairview_funds_transfer is ON by default (real Post Transfer control).
+#    Unattended replay fails closed; Approve/Deny at the operator console.
+.venv/bin/python -m fixture.app --port 8000   # if not already running
+.venv/bin/hands replay capabilities/generated/fairview_funds_transfer.json \
   --attended --intent-dual-control --invoker teller1 \
-  --param operator_id=teller1 --param password="$HANDS_PARAM_PASSWORD" \
-  --param member_number=100234 \
-  --param from_share="100234-S0001 - Regular Shares" --param to_share=100234-CERT-15 \
-  --param amount=1
-# → operator console: Approve transfer of $1 from 100234-S0001 - Regular Shares → 100234-CERT-15 for member 100234?
-#    Use unique non-HOLD share substrings. "Share Draft (Checking)" matches two
-#    options and S0070 is HOLD (no confirm page, Intent Gate never opens).
+  --param operator_id=teller1 --param password=password \
+  --param member_id=12345 \
+  --param from_share="S1 - Savings" --param to_share="S2 - Checking" \
+  --param amount=1.00 --param memo="demo"
+# → operator console http://127.0.0.1:8321/ :
+#    Approve transfer of $1.00 from S1 - Savings → S2 - Checking for member 12345?
+# Deny or walk away (TTL) → FAILURE, Post Transfer is never clicked.
+# Unattended (no --attended) → policy_violation / intent_approval_required
+.venv/bin/python scripts/demo_fairview_intent_gate.py   # scripted Approve → runs/
 .venv/bin/hands explain <run_id>
-# → Transfer intent approved by 'supervisor1'; intent_hash=…; chain intact; model events=0
+# → Transfer intent approved by '…'; intent_hash=…; chain intact; model events=0
+# MERIDIAN live is a separate target (see docs/ADAPTATION.md); do not assume it is up.
 ```
+
+The Fairview fixture is the take-home **and** the Adaptation-parity demo surface
+(7 functions: sign-on, inquiry by ID or last name, balances, funds transfer,
+open share, update contact, supervisor hold). Artifacts live in
+`capabilities/generated/fairview_*.json`. The original no-login lookup remains
+`capabilities/lookup_member_balance.json`.
 
 No key? Skip step 1 — `capabilities/` contains both a hand-written artifact
 and the one a real discovery run produced (its transcript is in `/evidence/`).
@@ -143,7 +152,7 @@ and the one a real discovery run produced (its transcript is in `/evidence/`).
 ## Verify the claims
 
 ```bash
-.venv/bin/pytest                      # 124 tests: schema, ladder semantics, taxonomy,
+.venv/bin/pytest                      # offline: schema, ladder, taxonomy, Fairview 7-cap replay,
                                       # escalation/handoff, intent gate, policy, hermetic zero-LLM proof
 .venv/bin/python evals/run_evals.py   # regenerates evals/results.md
 .venv/bin/ruff check . && .venv/bin/mypy

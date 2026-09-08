@@ -10,10 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from hands.artifact import Capability, load_capability
+from hands.artifact import Capability, load_capability, sign_risk_review
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ARTIFACT_PATH = REPO_ROOT / "capabilities" / "lookup_member_balance.json"
+FAIRVIEW_DIR = REPO_ROOT / "capabilities" / "generated"
 
 
 def _free_port() -> int:
@@ -62,9 +63,27 @@ def set_fault(base_url: str, name: str, enabled: bool) -> None:
         response.read()
 
 
+def reset_members(base_url: str) -> None:
+    """Restore the fixture member roster after a mutating flow."""
+    urllib.request.urlopen(base_url + "/__reset", timeout=5).read()
+
+
+def retarget(capability: Capability, fixture_app: str) -> Capability:
+    """Point a generated artifact at the live test server."""
+    capability.target.entry.web.url = fixture_app + "/"
+    return capability
+
+
+def load_fairview(name: str, fixture_app: str, *, sign: bool = False) -> Capability:
+    cap = retarget(load_capability(FAIRVIEW_DIR / f"{name}.json"), fixture_app)
+    if sign:
+        return sign_risk_review(cap, "reviewer-1")
+    return cap
+
+
 @pytest.fixture(autouse=True)
 def _reset_faults(request: pytest.FixtureRequest) -> Iterator[None]:
-    """Any test that used the fixture app leaves all faults off."""
+    """Any test that used the fixture app leaves all faults off and member data seeded."""
     yield
     if "fixture_app" in request.fixturenames:
         base = request.getfixturevalue("fixture_app")
@@ -75,6 +94,7 @@ def _reset_faults(request: pytest.FixtureRequest) -> Iterator[None]:
         for name, enabled in state.items():
             if enabled:
                 set_fault(base, name, False)
+        reset_members(base)
 
 
 @pytest.fixture()

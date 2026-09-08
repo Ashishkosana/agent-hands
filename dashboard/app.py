@@ -45,7 +45,12 @@ _MODEL_MARKERS = ("llm", "model", "planner", "discovery")
 
 def _title(capability: str) -> str:
     """Human title for a capability name: meridian_member_balance -> Member balance."""
-    words = capability.replace("meridian_", "").replace("_", " ").strip()
+    words = (
+        capability.replace("meridian_", "")
+        .replace("fairview_", "")
+        .replace("_", " ")
+        .strip()
+    )
     return words[:1].upper() + words[1:] if words else capability
 
 

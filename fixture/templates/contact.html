@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Update Member Information</h3>
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C; width: 110px;">Member #</td>
+<td style="font-family: 'Courier New', Courier, monospace; font-weight: bold;">{{ member_id }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Name</td>
+<td>{{ member.name }}</td>
+</tr>
+</table>
+<br>
+<form method="post" action="/member/{{ member_id }}/contact">
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
+<tr>
+<td colspan="2" bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px;"><b>Contact</b></td>
+</tr>
+<tr>
+<td bgcolor="#F4F7FA" style="background: #F4F7FA; color: #33475C; width: 110px;">E-mail</td>
+<td><input name="c1" size="28" value="{{ member.email }}"></td>
+</tr>
+<tr>
+<td bgcolor="#F4F7FA" style="background: #F4F7FA; color: #33475C;">Phone</td>
+<td><input name="c2" size="20" value="{{ member.phone }}"></td>
+</tr>
+<tr>
+<td bgcolor="#F4F7FA" style="background: #F4F7FA; color: #33475C;">Mailing Address</td>
+<td><input name="c3" size="36" value="{{ member.address }}"></td>
+</tr>
+<tr>
+<td bgcolor="#F4F7FA" style="background: #F4F7FA;">&nbsp;</td>
+<td><input type="submit" value="Save Changes"></td>
+</tr>
+</table>
+</form>
+{% endblock %}

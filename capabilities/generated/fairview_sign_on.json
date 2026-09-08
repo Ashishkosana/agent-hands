@@ -1,0 +1,323 @@
+{
+  "schema_version": 1,
+  "name": "fairview_sign_on",
+  "version": 1,
+  "description": "Sign on to the Fairview Teller Console and verify the session is active (Teller Menu is reachable).",
+  "target": {
+    "app": "fairview-teller",
+    "entry": {
+      "web": {
+        "url": "http://127.0.0.1:8000/"
+      }
+    }
+  },
+  "requires": [
+    {
+      "kind": "role_name_visible",
+      "role": "heading",
+      "name": "Fairview Teller Console",
+      "context": [
+        {
+          "name": "main",
+          "url_pattern": null,
+          "ordinal": null
+        }
+      ]
+    }
+  ],
+  "parameters": {
+    "operator_id": {
+      "type": "string",
+      "description": "Operator sign-on ID",
+      "sensitive": false,
+      "example": "teller1",
+      "pattern": "[a-zA-Z0-9_]{1,32}"
+    },
+    "password": {
+      "type": "string",
+      "description": "Operator password",
+      "sensitive": true,
+      "example": null,
+      "pattern": null
+    }
+  },
+  "outcomes": {
+    "SIGNON_FAILED": {
+      "description": "Operator ID or password was rejected."
+    }
+  },
+  "outputs": {},
+  "regions": {
+    "signon_error": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "anchor": {
+            "strategy": "text",
+            "text": "Sign-on failed"
+          },
+          "container": "table"
+        }
+      ],
+      "context": [
+        {
+          "name": "main",
+          "url_pattern": null,
+          "ordinal": null
+        }
+      ],
+      "fingerprint": null,
+      "fragile": false
+    }
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Open the sign-on form",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "link",
+            "name": "Sign On"
+          },
+          {
+            "strategy": "text",
+            "text": "Sign On"
+          }
+        ],
+        "context": [
+          {
+            "name": "nav",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "link",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Operator Sign On",
+          "context": [
+            {
+              "name": "main",
+              "url_pattern": null,
+              "ordinal": null
+            }
+          ]
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s2",
+      "intent": "Enter the operator ID",
+      "action": {
+        "kind": "type",
+        "text": "{param:operator_id}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "label",
+            "text": "Operator ID"
+          },
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Operator ID"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "operator_id",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s3",
+      "intent": "Enter the password",
+      "action": {
+        "kind": "type",
+        "text": "{param:password}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "label",
+            "text": "Password"
+          },
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Password"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "password",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s4",
+      "intent": "Click Sign On",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "button",
+            "name": "Sign On"
+          },
+          {
+            "strategy": "text",
+            "text": "Sign On"
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "button",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Teller Menu",
+          "context": [
+            {
+              "name": "main",
+              "url_pattern": null,
+              "ordinal": null
+            }
+          ]
+        }
+      ],
+      "risk": "risky"
+    }
+  ],
+  "conditions": [
+    {
+      "id": "signon_failed",
+      "armed_after": "s4",
+      "match": {
+        "kind": "region_text",
+        "region": "signon_error",
+        "patterns": [
+          "Operator ID or password is not recognized"
+        ]
+      },
+      "classify": "business_outcome",
+      "outcome_code": "SIGNON_FAILED",
+      "recovery": [],
+      "resume": null,
+      "restart_from": null,
+      "max_fires_per_run": 2,
+      "provenance": "authored",
+      "verified_by_eval": false
+    }
+  ],
+  "checkpoint": {
+    "all": [
+      {
+        "kind": "role_name_visible",
+        "role": "heading",
+        "name": "Teller Menu",
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ]
+      }
+    ]
+  },
+  "allow_unbound_checkpoint": true,
+  "recorded_by": null,
+  "risk_review": {
+    "reviewed_by": "ashish",
+    "artifact_hash": "7c96f3d463e07ce9be2dbc0e519b21e521850528ecc519c7385484812d4ff8ec"
+  }
+}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Open New Share</h3>
+{% if err %}
+<h3>Request Rejected</h3>
+{% endif %}
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C; width: 110px;">Member #</td>
+<td style="font-family: 'Courier New', Courier, monospace; font-weight: bold;">{{ member_id }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Name</td>
+<td>{{ member.name }}</td>
+</tr>
+</table>
+<br>
+<form method="post" action="/member/{{ member_id }}/share/review">
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
+<tr>
+<td colspan="2" bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px;"><b>New Share</b></td>
+</tr>
+<tr>
+<td bgcolor="#F4F7FA" style="background: #F4F7FA; color: #33475C; width: 110px;">Share Type</td>
+<td>
+<select name="n1">
+<option value=""></option>
+{% for st in share_types %}
+<option value="{{ st }}">{{ st }}</option>
+{% endfor %}
+</select>
+</td>
+</tr>
+<tr>
+<td bgcolor="#F4F7FA" style="background: #F4F7FA; color: #33475C;">Initial Deposit</td>
+<td><input name="n2" size="12"></td>
+</tr>
+<tr>
+<td bgcolor="#F4F7FA" style="background: #F4F7FA;">&nbsp;</td>
+<td><input type="submit" value="Continue"></td>
+</tr>
+</table>
+</form>
+{% if err %}
+<br>
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#C08484" bgcolor="#FFFFFF" style="border: 1px solid #C08484; border-left: 4px solid #A33A3A; min-width: 340px;">
+<tr>
+<td bgcolor="#F3DCDC" style="background: #F3DCDC; border-bottom: 1px solid #C08484; padding: 6px 10px;"><b style="color: #7C2B2B;">Validation</b></td>
+</tr>
+<tr>
+<td style="color: #5A2626;">{{ err }}</td>
+</tr>
+</table>
+{% endif %}
+{% endblock %}

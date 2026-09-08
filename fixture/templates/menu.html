@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Teller Menu</h3>
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C; width: 110px;">Operator</td>
+<td>{{ operator_id }} — {{ display }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Role</td>
+<td>{{ role }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Branch</td>
+<td>{{ branch }}</td>
+</tr>
+</table>
+<br>
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
+<tr>
+<td bgcolor="#DDE4EC" style="background: #DDE4EC; border-bottom: 1px solid #9AA8B8; padding: 6px 10px;"><b>FUNCTIONS</b></td>
+</tr>
+<tr>
+<td><a href="/search">Member Inquiry</a></td>
+</tr>
+</table>
+<p><font size="2" style="font-size: 11px; color: #52606D;">Session active. Member functions open from the inquiry record.</font></p>
+{% endblock %}

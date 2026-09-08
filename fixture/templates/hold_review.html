@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>Confirm Account Hold</h3>
+<table border="1" cellpadding="4" cellspacing="0" bordercolor="#9AA8B8" bgcolor="#FFFFFF" style="min-width: 340px;">
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C; width: 110px;">Member #</td>
+<td style="font-family: 'Courier New', Courier, monospace; font-weight: bold;">{{ member_id }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Name</td>
+<td>{{ member.name }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Share</td>
+<td>{{ pending.label }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Reason</td>
+<td>{{ pending.reason }}</td>
+</tr>
+<tr>
+<td bgcolor="#E7EDF4" style="background: #E7EDF4; color: #33475C;">Notes</td>
+<td>{{ pending.notes or "—" }}</td>
+</tr>
+</table>
+<br>
+<form method="post" action="/member/{{ member_id }}/hold/post">
+<input type="submit" value="Apply Hold">
+</form>
+<p><font size="2" style="font-size: 11px; color: #52606D;">Posting is irreversible.</font></p>
+{% endblock %}

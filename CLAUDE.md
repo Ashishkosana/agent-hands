@@ -43,7 +43,7 @@ python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/playwright install chromium
 
-.venv/bin/pytest                      # 85 tests, offline, ~50s (spins the fixture)
+.venv/bin/pytest                      # offline, spins the fixture
 .venv/bin/ruff check .                 # lint (config in pyproject)
 .venv/bin/mypy                         # strict; must stay clean
 .venv/bin/python evals/run_evals.py    # regenerates evals/results.md, offline
@@ -53,6 +53,10 @@ python3 -m venv .venv
 
 # Replay (no key, no network beyond localhost):
 .venv/bin/hands replay capabilities/lookup_member_balance.json --param member_id=12345
+.venv/bin/hands replay capabilities/generated/fairview_funds_transfer.json \
+  --attended --param operator_id=teller1 --param password=password \
+  --param member_id=12345 --param from_share="S1 - Savings" \
+  --param to_share="S2 - Checking" --param amount=1.00 --param memo=demo
 .venv/bin/hands replay <artifact> --headed          # watch the browser
 .venv/bin/hands replay <artifact> --attended        # failures -> operator console (port 8321)
 

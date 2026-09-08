@@ -1,0 +1,1040 @@
+{
+  "schema_version": 1,
+  "name": "fairview_funds_transfer",
+  "version": 1,
+  "description": "Sign on, look up a member, and transfer funds between two of their shares (review, then Post Transfer).",
+  "target": {
+    "app": "fairview-teller",
+    "entry": {
+      "web": {
+        "url": "http://127.0.0.1:8000/"
+      }
+    }
+  },
+  "requires": [
+    {
+      "kind": "role_name_visible",
+      "role": "heading",
+      "name": "Fairview Teller Console",
+      "context": [
+        {
+          "name": "main",
+          "url_pattern": null,
+          "ordinal": null
+        }
+      ]
+    }
+  ],
+  "parameters": {
+    "operator_id": {
+      "type": "string",
+      "description": "Operator sign-on ID",
+      "sensitive": false,
+      "example": "teller1",
+      "pattern": "[a-zA-Z0-9_]{1,32}"
+    },
+    "password": {
+      "type": "string",
+      "description": "Operator password",
+      "sensitive": true,
+      "example": null,
+      "pattern": null
+    },
+    "member_id": {
+      "type": "string",
+      "description": "Member number as printed on statements",
+      "sensitive": false,
+      "example": "12345",
+      "pattern": "[0-9]{1,10}"
+    },
+    "from_share": {
+      "type": "string",
+      "description": "Stable unique substring identifying the source share, e.g. 'S1 - Savings'",
+      "sensitive": false,
+      "example": "S1 - Savings",
+      "pattern": null
+    },
+    "to_share": {
+      "type": "string",
+      "description": "Stable unique substring identifying the destination share, e.g. 'S2 - Checking'",
+      "sensitive": false,
+      "example": "S2 - Checking",
+      "pattern": null
+    },
+    "amount": {
+      "type": "string",
+      "description": "Dollar amount to transfer",
+      "sensitive": false,
+      "example": "1.00",
+      "pattern": "[0-9]+(\\.[0-9]{1,2})?"
+    },
+    "memo": {
+      "type": "string",
+      "description": "Transfer memo",
+      "sensitive": false,
+      "example": "counter credit",
+      "pattern": null
+    }
+  },
+  "outcomes": {
+    "VALIDATION_REJECTED": {
+      "description": "The core rejected the transfer (insufficient funds, hold, or invalid amount)."
+    },
+    "MEMBER_NOT_FOUND": {
+      "description": "No member exists with this ID."
+    },
+    "SIGNON_FAILED": {
+      "description": "Operator ID or password was rejected."
+    }
+  },
+  "outputs": {
+    "confirmation_number": {
+      "type": "string",
+      "sensitive": false,
+      "region": "transfer_result",
+      "from": {
+        "ladder": [
+          {
+            "strategy": "relative",
+            "relation": "cell_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Confirmation:"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": null,
+        "fragile": false
+      },
+      "parse": {
+        "kind": "text"
+      }
+    }
+  },
+  "regions": {
+    "identity": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "anchor": {
+            "strategy": "text",
+            "text": "Confirmation:"
+          },
+          "container": "table"
+        }
+      ],
+      "context": [
+        {
+          "name": "main",
+          "url_pattern": null,
+          "ordinal": null
+        }
+      ],
+      "fingerprint": null,
+      "fragile": false
+    },
+    "transfer_result": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "anchor": {
+            "strategy": "text",
+            "text": "Confirmation:"
+          },
+          "container": "table"
+        }
+      ],
+      "context": [
+        {
+          "name": "main",
+          "url_pattern": null,
+          "ordinal": null
+        }
+      ],
+      "fingerprint": null,
+      "fragile": false
+    },
+    "confirm_member": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "anchor": {
+            "strategy": "text",
+            "text": "Member #"
+          },
+          "container": "table"
+        }
+      ],
+      "context": [
+        {
+          "name": "main",
+          "url_pattern": null,
+          "ordinal": null
+        }
+      ],
+      "fingerprint": null,
+      "fragile": false
+    },
+    "results": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "anchor": {
+            "strategy": "text",
+            "text": "Search Results"
+          },
+          "container": "table"
+        }
+      ],
+      "context": [
+        {
+          "name": "main",
+          "url_pattern": null,
+          "ordinal": null
+        }
+      ],
+      "fingerprint": null,
+      "fragile": false
+    },
+    "signon_error": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "anchor": {
+            "strategy": "text",
+            "text": "Sign-on failed"
+          },
+          "container": "table"
+        }
+      ],
+      "context": [
+        {
+          "name": "main",
+          "url_pattern": null,
+          "ordinal": null
+        }
+      ],
+      "fingerprint": null,
+      "fragile": false
+    }
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "intent": "Open the sign-on form",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "link",
+            "name": "Sign On"
+          },
+          {
+            "strategy": "text",
+            "text": "Sign On"
+          }
+        ],
+        "context": [
+          {
+            "name": "nav",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "link",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Operator Sign On",
+          "context": [
+            {
+              "name": "main",
+              "url_pattern": null,
+              "ordinal": null
+            }
+          ]
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s2",
+      "intent": "Enter the operator ID",
+      "action": {
+        "kind": "type",
+        "text": "{param:operator_id}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "label",
+            "text": "Operator ID"
+          },
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Operator ID"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "operator_id",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s3",
+      "intent": "Enter the password",
+      "action": {
+        "kind": "type",
+        "text": "{param:password}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "label",
+            "text": "Password"
+          },
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Password"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "password",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s4",
+      "intent": "Click Sign On",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "button",
+            "name": "Sign On"
+          },
+          {
+            "strategy": "text",
+            "text": "Sign On"
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "button",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Teller Menu",
+          "context": [
+            {
+              "name": "main",
+              "url_pattern": null,
+              "ordinal": null
+            }
+          ]
+        }
+      ],
+      "risk": "risky"
+    },
+    {
+      "id": "s5",
+      "intent": "Open member inquiry",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "link",
+            "name": "Member Inquiry"
+          },
+          {
+            "strategy": "text",
+            "text": "Member Inquiry"
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "link",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Member Inquiry",
+          "context": [
+            {
+              "name": "main",
+              "url_pattern": null,
+              "ordinal": null
+            }
+          ]
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s6",
+      "intent": "Enter the member ID",
+      "action": {
+        "kind": "type",
+        "text": "{param:member_id}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "label",
+            "text": "Member ID"
+          },
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Member ID"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "member_id",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s7",
+      "intent": "Submit the member search",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "button",
+            "name": "Search"
+          },
+          {
+            "strategy": "text",
+            "text": "Search"
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "button",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Member Details",
+          "context": [
+            {
+              "name": "main",
+              "url_pattern": null,
+              "ordinal": null
+            }
+          ]
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s8",
+      "intent": "Open the funds transfer form",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "link",
+            "name": "Funds Transfer"
+          },
+          {
+            "strategy": "text",
+            "text": "Funds Transfer"
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "link",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Funds Transfer",
+          "context": [
+            {
+              "name": "main",
+              "url_pattern": null,
+              "ordinal": null
+            }
+          ]
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s9",
+      "intent": "Choose the source share",
+      "action": {
+        "kind": "select",
+        "option": "{param:from_share}",
+        "match": "contains"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "From Share"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "combobox",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "option_selected",
+          "option": "{param:from_share}",
+          "match": "contains"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s10",
+      "intent": "Choose the destination share",
+      "action": {
+        "kind": "select",
+        "option": "{param:to_share}",
+        "match": "contains"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "To Share"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "combobox",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "option_selected",
+          "option": "{param:to_share}",
+          "match": "contains"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s11",
+      "intent": "Enter the transfer amount",
+      "action": {
+        "kind": "type",
+        "text": "{param:amount}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "label",
+            "text": "Amount"
+          },
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Amount"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "amount",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s12",
+      "intent": "Enter the memo",
+      "action": {
+        "kind": "type",
+        "text": "{param:memo}"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "label",
+            "text": "Memo"
+          },
+          {
+            "strategy": "relative",
+            "relation": "nearest_input_right",
+            "anchor": {
+              "strategy": "text",
+              "text": "Memo"
+            },
+            "container": null
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "textbox",
+          "editable": true
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "editable"
+        }
+      ],
+      "post": [
+        {
+          "kind": "value_matches_param",
+          "param": "memo",
+          "normalize": "none"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s13",
+      "intent": "Continue to the transfer review",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "button",
+            "name": "Continue"
+          },
+          {
+            "strategy": "text",
+            "text": "Continue"
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "button",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Transfer Review",
+          "context": [
+            {
+              "name": "main",
+              "url_pattern": null,
+              "ordinal": null
+            }
+          ]
+        },
+        {
+          "kind": "region_text_matches_param",
+          "region": "confirm_member",
+          "param": "member_id"
+        }
+      ],
+      "risk": "safe"
+    },
+    {
+      "id": "s14",
+      "intent": "Post the transfer",
+      "action": {
+        "kind": "click"
+      },
+      "target": {
+        "ladder": [
+          {
+            "strategy": "role",
+            "role": "button",
+            "name": "Post Transfer"
+          },
+          {
+            "strategy": "text",
+            "text": "Post Transfer"
+          }
+        ],
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ],
+        "fingerprint": {
+          "role": "button",
+          "editable": null
+        },
+        "fragile": false
+      },
+      "pre": [
+        {
+          "kind": "visible"
+        }
+      ],
+      "post": [
+        {
+          "kind": "role_name_visible",
+          "role": "heading",
+          "name": "Transfer Posted",
+          "context": [
+            {
+              "name": "main",
+              "url_pattern": null,
+              "ordinal": null
+            }
+          ]
+        }
+      ],
+      "risk": "risky"
+    }
+  ],
+  "conditions": [
+    {
+      "id": "signon_failed",
+      "armed_after": "s4",
+      "match": {
+        "kind": "region_text",
+        "region": "signon_error",
+        "patterns": [
+          "Operator ID or password is not recognized"
+        ]
+      },
+      "classify": "business_outcome",
+      "outcome_code": "SIGNON_FAILED",
+      "recovery": [],
+      "resume": null,
+      "restart_from": null,
+      "max_fires_per_run": 2,
+      "provenance": "authored",
+      "verified_by_eval": false
+    },
+    {
+      "id": "not_found",
+      "armed_after": "s7",
+      "match": {
+        "kind": "region_text",
+        "region": "results",
+        "patterns": [
+          "No member matches"
+        ]
+      },
+      "classify": "business_outcome",
+      "outcome_code": "MEMBER_NOT_FOUND",
+      "recovery": [],
+      "resume": null,
+      "restart_from": null,
+      "max_fires_per_run": 2,
+      "provenance": "authored",
+      "verified_by_eval": false
+    },
+    {
+      "id": "validation_rejected",
+      "armed_after": "s13",
+      "match": {
+        "kind": "role_name",
+        "role": "heading",
+        "name": "Transaction Rejected",
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ]
+      },
+      "classify": "business_outcome",
+      "outcome_code": "VALIDATION_REJECTED",
+      "recovery": [],
+      "resume": null,
+      "restart_from": null,
+      "max_fires_per_run": 2,
+      "provenance": "authored",
+      "verified_by_eval": false
+    }
+  ],
+  "checkpoint": {
+    "all": [
+      {
+        "kind": "role_name_visible",
+        "role": "heading",
+        "name": "Transfer Posted",
+        "context": [
+          {
+            "name": "main",
+            "url_pattern": null,
+            "ordinal": null
+          }
+        ]
+      },
+      {
+        "kind": "region_text_matches_param",
+        "region": "identity",
+        "param": "member_id"
+      }
+    ]
+  },
+  "allow_unbound_checkpoint": false,
+  "recorded_by": null,
+  "risk_review": {
+    "reviewed_by": "ashish",
+    "artifact_hash": "87f1cbd310125ee9eb3722abc58b57306f2c6ac9a47feb25a7005cb7befef830"
+  }
+}

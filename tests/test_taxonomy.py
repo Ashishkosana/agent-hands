@@ -161,7 +161,7 @@ def test_risky_step_is_never_retried_after_its_action_ran(
         eng._recover(
             capability,
             {"member_id": "12345"},
-            surface=None,  # type: ignore[arg-type]  # must fail before any surface use
+            surface=_NullSurface(),  # type: ignore[arg-type]  # no browser use, only dispatch log
             trace=_NullTrace(),  # type: ignore[arg-type]
             rec=_Recover(hit, acted=True),
             fires={},
@@ -170,6 +170,16 @@ def test_risky_step_is_never_retried_after_its_action_ran(
             step=risky_step,
         )
     assert "never auto-retried" in failure.value.report.expected
+    # Post-action interruption of a risky step is an UNRESOLVED outcome for an
+    # independent verifier to settle, not a FAILURE the caller may retry.
+    assert failure.value.unresolved is True
+
+
+class _NullSurface:
+    """Stands in for a WebSurface that never had a browser: nothing dispatched."""
+
+    def __init__(self) -> None:
+        self.dispatched: list[object] = []
 
 
 class _NullTrace:

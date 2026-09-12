@@ -1202,5 +1202,107 @@
       }
     ]
   },
-  "live": []
+  "live": [
+    {
+      "scenario": "B. NO_COMMIT_WITH_LOST_ACK",
+      "expected": "VERIFIED_NOT_COMMITTED",
+      "actual": "VERIFIED_NOT_COMMITTED",
+      "correct": true,
+      "executed": true,
+      "executor_result": "unresolved",
+      "executor_dispatched": true,
+      "verifier_pre": "OPEN",
+      "verifier_post": "OPEN",
+      "verifier_post_ok": true,
+      "reconciliation": "VERIFIED_NOT_COMMITTED",
+      "reason": "durable state unchanged (OPEN); executor was unresolved",
+      "retry_eligible": true,
+      "ground_truth_after": null,
+      "duration_s": 15.21,
+      "twin_id": "20260912T223308Z-twin-a038d7",
+      "member": "101555",
+      "share": "101555-CERT",
+      "fault_mode": "NO_COMMIT_WITH_LOST_ACK",
+      "false_verified": false,
+      "false_not_committed": false,
+      "target": "https://web-sample.interface-hiring.com/",
+      "chaos_fired": [
+        {
+          "mode": "NO_COMMIT_WITH_LOST_ACK",
+          "url": "https://web-sample.interface-hiring.com/members/101555/hold/post",
+          "method": "POST",
+          "forwarded": false
+        }
+      ],
+      "generated": "2026-09-12T22:33:23+00:00"
+    },
+    {
+      "scenario": "C. FALSE_SUCCESS",
+      "expected": "EFFECT_MISMATCH",
+      "actual": "EFFECT_MISMATCH",
+      "correct": true,
+      "executed": true,
+      "executor_result": "success",
+      "executor_dispatched": null,
+      "verifier_pre": "OPEN",
+      "verifier_post": "OPEN",
+      "verifier_post_ok": true,
+      "reconciliation": "EFFECT_MISMATCH",
+      "reason": "executor reported success but durable state is unchanged (OPEN)",
+      "retry_eligible": false,
+      "ground_truth_after": null,
+      "duration_s": 5.23,
+      "twin_id": "20260912T223330Z-twin-941518",
+      "member": "101555",
+      "share": "101555-CERT",
+      "fault_mode": "FALSE_SUCCESS",
+      "false_verified": false,
+      "false_not_committed": false,
+      "target": "https://web-sample.interface-hiring.com/",
+      "chaos_fired": [
+        {
+          "mode": "FALSE_SUCCESS",
+          "url": "https://web-sample.interface-hiring.com/members/101555/hold/post",
+          "method": "POST",
+          "forwarded": false,
+          "fabricated": "ACCOUNT HOLD APPLIED"
+        }
+      ],
+      "generated": "2026-09-12T22:33:35+00:00"
+    },
+    {
+      "scenario": "A. COMMIT_WITH_LOST_ACK",
+      "expected": "VERIFIED_COMMITTED",
+      "actual": "VERIFIED_COMMITTED",
+      "correct": true,
+      "executed": true,
+      "executor_result": "unresolved",
+      "executor_dispatched": true,
+      "verifier_pre": "OPEN",
+      "verifier_post": "HOLD",
+      "verifier_post_ok": true,
+      "reconciliation": "VERIFIED_COMMITTED",
+      "reason": "durable state moved OPEN -> HOLD; executor was unresolved",
+      "retry_eligible": false,
+      "ground_truth_after": null,
+      "duration_s": 15.74,
+      "twin_id": "20260912T223343Z-twin-dd656d",
+      "member": "101555",
+      "share": "101555-CERT",
+      "fault_mode": "COMMIT_WITH_LOST_ACK",
+      "false_verified": false,
+      "false_not_committed": false,
+      "target": "https://web-sample.interface-hiring.com/",
+      "chaos_fired": [
+        {
+          "mode": "COMMIT_WITH_LOST_ACK",
+          "url": "https://web-sample.interface-hiring.com/members/101555/hold/post",
+          "method": "POST",
+          "server_status": 200,
+          "response_withheld": true
+        }
+      ],
+      "generated": "2026-09-12T22:33:59+00:00"
+    }
+  ]
 }

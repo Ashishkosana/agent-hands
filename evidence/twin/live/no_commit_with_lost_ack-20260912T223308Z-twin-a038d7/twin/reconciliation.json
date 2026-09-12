@@ -1,0 +1,11 @@
+{
+  "verdict": "VERIFIED_NOT_COMMITTED",
+  "reason": "durable state unchanged (OPEN); executor was unresolved",
+  "retry_eligible": true,
+  "executor_claim": null,
+  "executor_kind": "unresolved",
+  "target_pre": "OPEN",
+  "target_post": "OPEN",
+  "collateral_changes": [],
+  "inputs_sha256": "91792eef4f811dc35b8365ca0eb5c1a3b727c07133a2594a5b33a434ef42f41d"
+}

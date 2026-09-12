@@ -88,4 +88,12 @@ Representative evidence bundles (twin trace, executor run, both verifier runs) a
 
 ## Live MERIDIAN validation
 
-_No live run recorded yet._
+Each row is ONE verified run against the real console with the original signed artifacts; the executor signed on as a supervisor, the verifier as a teller (a different login — the same credential class). No ground-truth back door exists on the live core: 'truth' here is what the independent verifier read.
+
+| when | scenario | expected | actual | executor | dispatched | pre | post | chaos record | s | evidence |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-09-12T22:33:23+00:00 | B. NO_COMMIT_WITH_LOST_ACK | VERIFIED_NOT_COMMITTED | VERIFIED_NOT_COMMITTED | unresolved | True | OPEN | OPEN | {'mode': 'NO_COMMIT_WITH_LOST_ACK', 'method': 'POST', 'forwarded': False} | 15.21 | `20260912T223308Z-twin-a038d7` |
+| 2026-09-12T22:33:35+00:00 | C. FALSE_SUCCESS | EFFECT_MISMATCH | EFFECT_MISMATCH | success | None | OPEN | OPEN | {'mode': 'FALSE_SUCCESS', 'method': 'POST', 'forwarded': False, 'fabricated': 'ACCOUNT HOLD APPLIED'} | 5.23 | `20260912T223330Z-twin-941518` |
+| 2026-09-12T22:33:59+00:00 | A. COMMIT_WITH_LOST_ACK | VERIFIED_COMMITTED | VERIFIED_COMMITTED | unresolved | True | OPEN | HOLD | server_status=200 withheld=True | 15.74 | `20260912T223343Z-twin-dd656d` |
+
+Evidence bundles: `evidence/twin/live/`.

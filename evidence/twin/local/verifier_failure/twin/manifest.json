@@ -1,0 +1,30 @@
+{
+  "twin_dir": "/tmp/agent-hands/runs/twin-evals/20260912T223049Z-twin-2e9448",
+  "fault_mode": "VERIFIER_FAILURE",
+  "chaos_fired": [],
+  "executor_artifact_sha256": "6e406b77114ad5a3d80a5c194767ad3fccf55c05f0c00ce37c1e43badb861508",
+  "verifier_artifact_sha256": "56c58e0a668b593c259de32f87a64e01d248ced57c6878a72f70415d5abd8794",
+  "run_dirs": {
+    "twin": "/tmp/agent-hands/runs/twin-evals/20260912T223049Z-twin-2e9448",
+    "pre_verifier": "/tmp/agent-hands/runs/twin-evals/20260912T223050Z-meridian_member_record-eecfdd",
+    "executor": "/tmp/agent-hands/runs/twin-evals/20260912T223051Z-meridian_place_hold-c3b5ae",
+    "post_verifier": "/tmp/agent-hands/runs/twin-evals/20260912T223052Z-meridian_member_record-627d98"
+  },
+  "trace_sha256": {
+    "twin": "a5a76a8154aea105900b8696b9197bb09306112d3f6dbd0035413accfd952509",
+    "pre_verifier": "3d9b3ad1bccda85048fd92529147b85ba287a49a937c4c1bd3e290b290282ccd",
+    "executor": "b336d10b4a7d53bf5116e441575a2664f2fe339d7982b23a21930c42175f8e1b",
+    "post_verifier": "1f78ab5e264ca0ca06b8038193a6fe6c321e98ac0a5e588a5a6c0036e012bbbf"
+  },
+  "trace_chain_intact": {
+    "twin": true,
+    "pre_verifier": true,
+    "executor": true,
+    "post_verifier": true
+  },
+  "durations_s": {
+    "pre_image": 1.254,
+    "executor": 1.297,
+    "post_image": 5.208
+  }
+}

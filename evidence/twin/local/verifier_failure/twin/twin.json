@@ -1,0 +1,142 @@
+{
+  "twin_id": "20260912T223049Z-twin-2e9448",
+  "started_at": "2026-09-12T22:30:49.843+00:00",
+  "fault_mode": "VERIFIER_FAILURE",
+  "expected": {
+    "member_number": "100234",
+    "share_id": "100234-S0070",
+    "from_status": "OPEN",
+    "to_status": "HOLD"
+  },
+  "executed": true,
+  "aborted": null,
+  "pre": {
+    "ok": true,
+    "observation": {
+      "kind": "share_statuses",
+      "member_number": "100234",
+      "shares": [
+        {
+          "share_id": "100234-S0001",
+          "type": "Regular Shares",
+          "status": "OPEN",
+          "status_raw": "OPEN"
+        },
+        {
+          "share_id": "100234-S0070",
+          "type": "Share Draft (Checking)",
+          "status": "OPEN",
+          "status_raw": "OPEN"
+        }
+      ],
+      "observed_at": "2026-09-12T22:30:51.018+00:00",
+      "page_url": "http://127.0.0.1:52575/members/100234"
+    },
+    "result_kind": "success",
+    "result": {
+      "result": "success",
+      "outputs": {},
+      "observation": {
+        "kind": "share_statuses",
+        "member_number": "100234",
+        "shares": [
+          {
+            "share_id": "100234-S0001",
+            "type": "Regular Shares",
+            "status": "OPEN",
+            "status_raw": "OPEN"
+          },
+          {
+            "share_id": "100234-S0070",
+            "type": "Share Draft (Checking)",
+            "status": "OPEN",
+            "status_raw": "OPEN"
+          }
+        ],
+        "observed_at": "2026-09-12T22:30:51.018+00:00",
+        "page_url": "http://127.0.0.1:52575/members/100234"
+      }
+    },
+    "run_dir": "/tmp/agent-hands/runs/twin-evals/20260912T223050Z-meridian_member_record-eecfdd",
+    "artifact_sha256": "56c58e0a668b593c259de32f87a64e01d248ced57c6878a72f70415d5abd8794",
+    "read_only_violations": [],
+    "error": null,
+    "elapsed_s": 1.0501929179990839,
+    "operator_id": "teller1"
+  },
+  "executor": {
+    "result_kind": "success",
+    "result": {
+      "result": "success",
+      "outputs": {
+        "confirmation_number": "CN480021"
+      }
+    },
+    "run_dir": "/tmp/agent-hands/runs/twin-evals/20260912T223051Z-meridian_place_hold-c3b5ae",
+    "artifact_sha256": "6e406b77114ad5a3d80a5c194767ad3fccf55c05f0c00ce37c1e43badb861508",
+    "elapsed_s": 1.297274821999963
+  },
+  "post": {
+    "ok": false,
+    "observation": null,
+    "result_kind": "failure",
+    "result": {
+      "result": "failure",
+      "report": {
+        "step_id": "s7",
+        "intent": "Click Select to open member record",
+        "expected": "a visible heading named 'MEMBER RECORD'",
+        "observed": "postconditions still unmet at http://127.0.0.1:52575/members/100234",
+        "screenshot_path": "/tmp/agent-hands/runs/twin-evals/20260912T223052Z-meridian_member_record-627d98/failure.png",
+        "snapshot_path": "/tmp/agent-hands/runs/twin-evals/20260912T223052Z-meridian_member_record-627d98/failure-a11y.txt"
+      }
+    },
+    "run_dir": "/tmp/agent-hands/runs/twin-evals/20260912T223052Z-meridian_member_record-627d98",
+    "artifact_sha256": "56c58e0a668b593c259de32f87a64e01d248ced57c6878a72f70415d5abd8794",
+    "read_only_violations": [],
+    "error": "verifier replay ended in failure",
+    "elapsed_s": 5.004614702998879,
+    "operator_id": "teller1"
+  },
+  "reconciliation": {
+    "verdict": "UNVERIFIABLE",
+    "reason": "post-image unavailable: durable state could not be read",
+    "retry_eligible": false,
+    "executor_claim": true,
+    "executor_kind": "success",
+    "target_pre": "OPEN",
+    "target_post": null,
+    "collateral_changes": [],
+    "inputs_sha256": "2d1983961ccf5999075f92301265543a07f0714f3f1b6c0d39682acc9d50f7a1"
+  },
+  "manifest": {
+    "twin_dir": "/tmp/agent-hands/runs/twin-evals/20260912T223049Z-twin-2e9448",
+    "fault_mode": "VERIFIER_FAILURE",
+    "chaos_fired": [],
+    "executor_artifact_sha256": "6e406b77114ad5a3d80a5c194767ad3fccf55c05f0c00ce37c1e43badb861508",
+    "verifier_artifact_sha256": "56c58e0a668b593c259de32f87a64e01d248ced57c6878a72f70415d5abd8794",
+    "run_dirs": {
+      "twin": "/tmp/agent-hands/runs/twin-evals/20260912T223049Z-twin-2e9448",
+      "pre_verifier": "/tmp/agent-hands/runs/twin-evals/20260912T223050Z-meridian_member_record-eecfdd",
+      "executor": "/tmp/agent-hands/runs/twin-evals/20260912T223051Z-meridian_place_hold-c3b5ae",
+      "post_verifier": "/tmp/agent-hands/runs/twin-evals/20260912T223052Z-meridian_member_record-627d98"
+    },
+    "trace_sha256": {
+      "twin": "a5a76a8154aea105900b8696b9197bb09306112d3f6dbd0035413accfd952509",
+      "pre_verifier": "3d9b3ad1bccda85048fd92529147b85ba287a49a937c4c1bd3e290b290282ccd",
+      "executor": "b336d10b4a7d53bf5116e441575a2664f2fe339d7982b23a21930c42175f8e1b",
+      "post_verifier": "1f78ab5e264ca0ca06b8038193a6fe6c321e98ac0a5e588a5a6c0036e012bbbf"
+    },
+    "trace_chain_intact": {
+      "twin": true,
+      "pre_verifier": true,
+      "executor": true,
+      "post_verifier": true
+    },
+    "durations_s": {
+      "pre_image": 1.254,
+      "executor": 1.297,
+      "post_image": 5.208
+    }
+  }
+}

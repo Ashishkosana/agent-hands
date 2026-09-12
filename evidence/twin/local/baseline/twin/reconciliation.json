@@ -1,0 +1,11 @@
+{
+  "verdict": "VERIFIED_COMMITTED",
+  "reason": "durable state moved OPEN -> HOLD; executor confirmed",
+  "retry_eligible": false,
+  "executor_claim": true,
+  "executor_kind": "success",
+  "target_pre": "OPEN",
+  "target_post": "HOLD",
+  "collateral_changes": [],
+  "inputs_sha256": "3aa32c1529dc192f39648e1453059006bf6bb1799c2dddc6f5bdb6e7333c1122"
+}

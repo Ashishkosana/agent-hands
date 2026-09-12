@@ -416,8 +416,36 @@ ARTIFACTS["meridian_place_hold"] = capability(
 )
 
 
-def main() -> None:
-    for name, doc in ARTIFACTS.items():
+# ─── V. MEMBER RECORD (the verifier's read-only path) ───────────────────────
+# Used by hands.verifier to observe durable share state independently of an
+# executor. It reaches the identity-bound MEMBER RECORD page and stops: no
+# outputs (nothing sensitive is extracted), no action links required, and the
+# only non-GET request on this path is the sign-on itself.
+ARTIFACTS["meridian_member_record"] = capability(
+    name="meridian_member_record",
+    description=("Sign on and open a member's record, proving it is the right member. "
+                 "Read-only path used for independent observation of durable state "
+                 "(share statuses are read from the SHARES / BALANCES table)."),
+    parameters={"operator_id": P_OPERATOR, "password": P_PASSWORD, "member_number": P_MEMBER},
+    steps=PREFIX,
+    regions={"identity": IDENTITY_REGION, "outcome_member_not_found": SEARCH_REGION},
+    outcomes={"MEMBER_NOT_FOUND": {"description": "No member exists with this number."}},
+    conditions=[NOT_FOUND_CONDITION, session_heal(ENTRY)],
+    outputs={},
+    checkpoint=BASE["checkpoint"],
+)
+
+
+def main(argv: list[str] | None = None) -> None:
+    """Write artifacts. ``--only NAME`` writes just that one — the others on
+    disk carry risk-review signatures that a rewrite would void."""
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--only", action="append", default=[], metavar="NAME")
+    args = parser.parse_args(argv)
+    selected = {n: d for n, d in ARTIFACTS.items() if not args.only or n in args.only}
+    for name, doc in selected.items():
         cap = Capability.model_validate(doc)  # every integrity rule enforced here
         (GEN / f"{name}.json").write_text(dump_capability(cap))
         risky = [s.id for s in cap.steps if s.risk == "risky"]

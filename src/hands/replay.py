@@ -263,7 +263,7 @@ class ReplayEngine:
                         dispatched=failed.dispatched,
                         observed=failed.report.observed,
                     )
-                    trace.emit("run_finished", result=_masked_result(capability, result))
+                    trace.emit("run_finished", result=masked_result(capability, result))
                     return result
                 if surface.blocked_requests:
                     result = PolicyViolation(
@@ -272,7 +272,7 @@ class ReplayEngine:
                         f"the allowlist, e.g. {surface.blocked_requests[0]}; the flow could "
                         f"not proceed",
                     )
-                    trace.emit("run_finished", result=_masked_result(capability, result))
+                    trace.emit("run_finished", result=masked_result(capability, result))
                     return result
                 # Page-content evidence is suppressed once a human has driven
                 # the session: what they entered may still sit in page state,
@@ -292,7 +292,7 @@ class ReplayEngine:
                 if console is not None:
                     console.stop()
                 self._hub = None
-            trace.emit("run_finished", result=_masked_result(capability, result))
+            trace.emit("run_finished", result=masked_result(capability, result))
         return result
 
     # ------------------------------------------------------------------ flow
@@ -1108,7 +1108,7 @@ def _masked_action_text(
     return resolve_text(step.action.text, masked)
 
 
-def _masked_result(capability: Capability, result: ReplayResult) -> dict[str, object]:
+def masked_result(capability: Capability, result: ReplayResult) -> dict[str, object]:
     if isinstance(result, Success):
         masked_outputs: dict[str, object] = {}
         for name, value in result.outputs.items():

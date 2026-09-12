@@ -1,7 +1,10 @@
 """Command-line interface.
 
 Exit codes: 0 = the system worked (SUCCESS or a BUSINESS_OUTCOME — an answer
-is not a malfunction); 1 = FAILURE or PRECONDITION_FAILED; 2 = usage error.
+is not a malfunction); 1 = FAILURE, UNRESOLVED, PRECONDITION_FAILED or
+POLICY_VIOLATION; 2 = usage error. UNRESOLVED shares exit 1 deliberately: a
+shell script must not treat it as "worked", and the JSON on stdout carries the
+distinction for anything that can read it.
 """
 
 from __future__ import annotations

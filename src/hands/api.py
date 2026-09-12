@@ -35,10 +35,14 @@ _RESULT_ADAPTER: TypeAdapter[ReplayResult] = TypeAdapter(ReplayResult)
 
 # HTTP status per result kind. A business outcome is an ANSWER (200); a failed
 # precondition or a broken flow is a 422; a refused guardrail is a 409 conflict.
+# UNRESOLVED is also 409: the state is in conflict with the caller's model of
+# it and MUST be verified before any retry — it is deliberately not a 5xx,
+# which clients retry reflexively.
 _STATUS: dict[str, int] = {
     "success": 200,
     "business_outcome": 200,
     "failure": 422,
+    "unresolved": 409,
     "precondition_failed": 422,
     "policy_violation": 409,
 }

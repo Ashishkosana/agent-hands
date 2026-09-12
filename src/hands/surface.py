@@ -14,6 +14,7 @@ Ladder semantics (pinned, part of the schema contract):
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -46,9 +47,11 @@ from hands.artifact import (
 )
 
 __all__ = [
+    "DispatchedRequest",
     "FingerprintMismatch",
     "PlaywrightError",
     "PlaywrightTimeoutError",
+    "RequestInterceptor",
     "ResolvedTarget",
     "SurfaceError",
     "TargetAmbiguous",
@@ -56,6 +59,24 @@ __all__ = [
     "WebSurface",
     "describe_rung",
 ]
+
+# A hook at the network layer, consulted for every ON-allowlist request AFTER
+# the allowlist check. Returning True means the hook handled the route
+# (fulfilled/aborted it); False lets the request continue normally. Used by
+# test-only fault injection (hands.chaos) and by the verifier's read-only
+# enforcement; never reachable from the CLI or the API.
+RequestInterceptor = Callable[[Route, PwRequest], bool]
+
+
+@dataclass(frozen=True)
+class DispatchedRequest:
+    """A non-GET request the browser was observed sending. Recorded at the
+    request event — i.e. BEFORE any routing decision — so it reflects what
+    left the page, not what reached the server."""
+
+    method: str
+    url: str
+    ts: float
 
 
 class SurfaceError(Exception):
@@ -175,21 +196,37 @@ class WebSurface:
         entry_url: str,
         on_human_event: Callable[[dict[str, object]], None] | None = None,
         allowed_hosts: list[str] | None = None,
+        interceptor: RequestInterceptor | None = None,
     ) -> None:
         self._playwright = sync_playwright().start()
         self._browser = self._playwright.chromium.launch(headless=not self._headed)
         self._page = self._browser.new_page()
         self.blocked_requests: list[str] = []
-        if allowed_hosts is not None:
-            allowed = set(allowed_hosts)
+        # Every non-GET request the page dispatches, in order. The engine uses
+        # this to tell "a consequential request left the browser and its answer
+        # never came back" (UNRESOLVED) from "nothing was ever sent" (FAILURE).
+        self.dispatched: list[DispatchedRequest] = []
+
+        def record_dispatch(request: PwRequest) -> None:
+            method = request.method.upper()
+            if method != "GET":
+                self.dispatched.append(
+                    DispatchedRequest(method=method, url=request.url, ts=time.time())
+                )
+
+        self._page.on("request", record_dispatch)
+        if allowed_hosts is not None or interceptor is not None:
+            allowed = set(allowed_hosts) if allowed_hosts is not None else None
 
             def enforce(route: Route, request: PwRequest) -> None:
                 host = urlparse(request.url).netloc
-                if host in allowed:
-                    route.continue_()
-                else:
+                if allowed is not None and host not in allowed:
                     self.blocked_requests.append(request.url)
                     route.abort()
+                    return
+                if interceptor is not None and interceptor(route, request):
+                    return
+                route.continue_()
 
             # Network-layer enforcement: context-wide routing covers every
             # request — clicks, redirects, popups, iframes, subresources —
@@ -272,6 +309,27 @@ class WebSurface:
 
     def resolve_region(self, target: TargetLadder) -> Locator:
         return self.resolve(target).locator
+
+    def read_table(self, header_cell: str, within: Locator | None = None) -> list[list[str]]:
+        """Read a legacy data table as rows of cell text, identified by the
+        exact text of one of its header cells (e.g. ``"Share ID"``). Exactly
+        one visible table may carry that header — several is ambiguity and is
+        refused, none is TargetNotFound. Returns every row INCLUDING the
+        header row; the caller interprets columns. Perception only."""
+        base: Frame | Locator = within if within is not None else self.page.main_frame
+        headers = _innermost(_visible(base.get_by_text(header_cell, exact=True)))
+        if not headers:
+            raise TargetNotFound([f"table header cell {header_cell!r} (0 matches)"])
+        if len(headers) > 1:
+            raise TargetAmbiguous(f"table header cell {header_cell!r}", len(headers))
+        table = headers[0].locator("xpath=ancestor::table[1]")
+        if table.count() != 1:
+            raise TargetNotFound([f"enclosing table of header {header_cell!r}"])
+        rows: list[list[str]] = []
+        for row in _visible(table.locator("xpath=./tbody/tr | ./tr")):
+            cells = row.locator("xpath=./td | ./th").all_inner_texts()
+            rows.append([re.sub(r"\s+", " ", c).strip() for c in cells])
+        return rows
 
     def _rung_matches(self, base: Frame | Locator, rung: Rung) -> list[Locator]:
         if isinstance(rung, RoleRung):

@@ -32,6 +32,7 @@ _PLAIN_STATUS = {
     "success": ("Completed", "#067647", "#ecfdf3"),
     "business_outcome": ("Clean answer", "#175cd3", "#eff8ff"),
     "failure": ("Stopped safely", "#b42318", "#fef3f2"),
+    "unresolved": ("Outcome unknown", "#b54708", "#fffaeb"),
     "precondition_failed": ("Not ready", "#b54708", "#fffaeb"),
     "policy_violation": ("Blocked", "#b54708", "#fffaeb"),
     "recorded": ("Recipe recorded", "#067647", "#ecfdf3"),
@@ -92,6 +93,8 @@ def _plain_sentence(kind: str, status: str, outputs: dict[str, Any] | None, code
         return f"Real answer: {human} (not an error)"
     if status == "failure":
         return "Something was off — it stopped without acting wrongly, evidence saved"
+    if status == "unresolved":
+        return "It acted, but never saw the answer — needs an independent check before any retry"
     if status == "policy_violation":
         return "A safety rule refused this run"
     if status == "precondition_failed":

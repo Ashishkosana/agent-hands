@@ -42,6 +42,8 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 # embeds prompt/tool literals; line-length does not apply meaningfully there.
 "dashboard/*" = ["E501"]
 "chatbot/*" = ["E501"]
+# The MERIDIAN-shaped fixture embeds the live console's table-soup markup.
+"fixture/meridian.py" = ["E501"]
 
 [tool.mypy]
 strict = true

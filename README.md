@@ -125,8 +125,8 @@ and the one a real discovery run produced (its transcript is in `/evidence/`).
 ## Verify the claims
 
 ```bash
-.venv/bin/pytest                      # 85 tests: schema, ladder semantics, taxonomy,
-                                      # escalation/handoff, policy, hermetic zero-LLM proof
+.venv/bin/pytest                      # 137 tests: schema, ladder semantics, taxonomy,
+                                      # escalation/handoff, policy, zero-LLM proof, verifier twin
 .venv/bin/python evals/run_evals.py   # regenerates evals/results.md
 .venv/bin/ruff check . && .venv/bin/mypy
 ```
@@ -147,7 +147,42 @@ network blocked at the socket level, and asserts success.
 | `fixture/` | the target app: table-soup markup, no test IDs, injectable runtime faults |
 | `capabilities/` | artifacts + discovery requests |
 | `evidence/` · `evals/` | run records and measured results |
+| `src/hands/verifier.py` · `reconcile.py` · `twin.py` · `chaos.py` | verifier twin: read-only observer, pure reconciler, orchestrator, fault injection |
+| `fixture/meridian.py` | MERIDIAN-shaped local fixture with a ground-truth endpoint for chaos evals |
 | `docs/DESIGN.md` | the full design, including decisions considered and rejected |
+
+## Verifier twins (post-buildathon research branch)
+
+The buildathon build could say `SUCCESS`, `FAILURE`, `BUSINESS_OUTCOME`,
+`ESCALATED` or `POLICY_STOP`. It could not say the honest thing about a
+consequential action whose acknowledgement never arrived: *I don't know
+whether that committed.* This branch adds that sixth result, `UNRESOLVED`,
+and a second, read-only replayer that finds out.
+
+- **Executor** replays `meridian_place_hold`; if the hold POST leaves the
+  browser but its outcome is never seen, the result is `UNRESOLVED`, never a
+  retry.
+- **Verifier** replays `meridian_member_record` in a fresh interpreter and
+  browser context, may only issue GETs (plus the sign-on POST), and returns
+  the share-status table as raw observations.
+- **Reconciler** is a pure function over expected effect, pre-image,
+  post-image and executor result: `VERIFIED_COMMITTED`,
+  `VERIFIED_NOT_COMMITTED`, `EFFECT_MISMATCH`, or `UNVERIFIABLE`.
+
+```bash
+.venv/bin/python evals/run_twin_evals.py --runs 10          # local fault matrix
+HANDS_PARAM_PASSWORD=... .venv/bin/python evals/run_twin_evals.py --live \
+  --live-scenario COMMIT_WITH_LOST_ACK --member 101555 --share 101555-CERT \
+  --share-option Certificate --executor-operator super1 --verifier-operator teller1
+```
+
+Measured: 52/52 local fault-injection runs classified as expected, 0 false
+`VERIFIED_COMMITTED`, 0 false `VERIFIED_NOT_COMMITTED`, all 10 `UNVERIFIABLE`
+verdicts attributable to the deliberately broken verifier; plus one live
+MERIDIAN run each of lost-ack-committed, lost-ack-not-committed, and
+false-success, all classified correctly. Local and live counts are separate
+numbers (`evals/twin_results.md`). Design, deviations and backlog:
+`docs/VERIFIER_TWINS.md`; what is and is not new: `docs/PRIOR_ART.md`.
 
 ## Honest limitations
 

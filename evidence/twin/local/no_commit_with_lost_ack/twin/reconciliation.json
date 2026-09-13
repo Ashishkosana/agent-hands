@@ -1,11 +1,15 @@
 {
   "verdict": "VERIFIED_NOT_COMMITTED",
-  "reason": "durable state unchanged (OPEN); executor was unresolved",
+  "reason": "durable state observed unchanged (OPEN) across the observation window; executor was unresolved",
   "retry_eligible": true,
   "executor_claim": null,
   "executor_kind": "unresolved",
   "target_pre": "OPEN",
   "target_post": "OPEN",
   "collateral_changes": [],
-  "inputs_sha256": "3866b33ffdb018302be92edfb7eb58d209a18c33a8104eb688120280eba1385c"
+  "inputs_sha256": "d824e007bf39c4f03a44f493d49107aa521f5432f92287c522153e87b63bc221",
+  "attribution": "window",
+  "pre_observed_at": "2026-09-13T10:31:54.460+00:00",
+  "post_observed_at": "2026-09-13T10:32:00.857+00:00",
+  "observation_window_ms": 6397
 }

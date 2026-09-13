@@ -7,5 +7,9 @@
   "target_pre": "OPEN",
   "target_post": null,
   "collateral_changes": [],
-  "inputs_sha256": "2d1983961ccf5999075f92301265543a07f0714f3f1b6c0d39682acc9d50f7a1"
+  "inputs_sha256": "88301914212ded3d2dfb26c03c6a5532280fef2fcade50f2aa4ad946220823b7",
+  "attribution": "window",
+  "pre_observed_at": "2026-09-13T10:33:45.277+00:00",
+  "post_observed_at": null,
+  "observation_window_ms": null
 }

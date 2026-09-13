@@ -1,0 +1,34 @@
+# frame: http://127.0.0.1:60475/signon
+- table:
+  - rowgroup:
+    - row "MERIDIAN CORE Member Services Platform v4.2.1 (local fixture)":
+      - cell "MERIDIAN CORE Member Services Platform v4.2.1 (local fixture)"
+    - 'row "OPERATOR SIGN ON Invalid operator ID or password. Operator ID: Password: Branch: MAIN-001 - Main Office Sign On Demo operators: teller1 / password · super1 / password (supervisor)"':
+      - 'cell "OPERATOR SIGN ON Invalid operator ID or password. Operator ID: Password: Branch: MAIN-001 - Main Office Sign On Demo operators: teller1 / password · super1 / password (supervisor)"':
+        - heading "OPERATOR SIGN ON" [level=1]
+        - text: Invalid operator ID or password.
+        - table:
+          - rowgroup:
+            - row "Operator ID:":
+              - cell "Operator ID:"
+              - cell:
+                - textbox
+            - row "Password:":
+              - cell "Password:"
+              - cell:
+                - textbox
+            - 'row "Branch: MAIN-001 - Main Office"':
+              - cell "Branch:"
+              - cell "MAIN-001 - Main Office":
+                - combobox:
+                  - option "MAIN-001 - Main Office" [selected]
+                  - option "WEST-014 - Westside"
+            - row "Sign On":
+              - cell
+              - cell "Sign On":
+                - button "Sign On"
+        - text: "Demo operators: teller1 / password · super1 / password (supervisor)"
+    - row "NOT SIGNED ON":
+      - cell "NOT SIGNED ON"
+    - row "F3=Sign Off F5=Main Menu F7=Member Inquiry F12=Cancel":
+      - cell "F3=Sign Off F5=Main Menu F7=Member Inquiry F12=Cancel"

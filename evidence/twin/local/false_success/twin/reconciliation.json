@@ -1,11 +1,15 @@
 {
   "verdict": "EFFECT_MISMATCH",
-  "reason": "executor reported success but durable state is unchanged (OPEN)",
+  "reason": "executor reported success but durable state was observed unchanged (OPEN) across the observation window",
   "retry_eligible": false,
   "executor_claim": true,
   "executor_kind": "success",
   "target_pre": "OPEN",
   "target_post": "OPEN",
   "collateral_changes": [],
-  "inputs_sha256": "35a7c38f081e3c9415d83c97613f3ab623b6083cc1c9296d8365b0bdc0a62be9"
+  "inputs_sha256": "d30c4c4d4b7c2d5302a8638690ceb346ee91f5c485e959fe6a572e45874bae5b",
+  "attribution": "window",
+  "pre_observed_at": "2026-09-13T10:33:10.390+00:00",
+  "post_observed_at": "2026-09-13T10:33:12.777+00:00",
+  "observation_window_ms": 2387
 }

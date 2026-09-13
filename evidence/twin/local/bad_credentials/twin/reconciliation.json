@@ -1,0 +1,15 @@
+{
+  "verdict": "VERIFIED_NOT_COMMITTED",
+  "reason": "durable state observed unchanged (OPEN) across the observation window; executor reported failure",
+  "retry_eligible": true,
+  "executor_claim": false,
+  "executor_kind": "failure",
+  "target_pre": "OPEN",
+  "target_post": "OPEN",
+  "collateral_changes": [],
+  "inputs_sha256": "d5681dc9f76915b7f1ddeb70c1e0490c921dfcfd9770e502a23b4a6c12464eb6",
+  "attribution": "window",
+  "pre_observed_at": "2026-09-13T10:38:10.284+00:00",
+  "post_observed_at": "2026-09-13T10:38:16.117+00:00",
+  "observation_window_ms": 5833
+}

@@ -6,7 +6,7 @@
       "confirmation_number": "CN480021"
     }
   },
-  "run_dir": "/tmp/agent-hands/runs/twin-evals/20260912T223051Z-meridian_place_hold-c3b5ae",
-  "artifact_sha256": "6e406b77114ad5a3d80a5c194767ad3fccf55c05f0c00ce37c1e43badb861508",
-  "elapsed_s": 1.297274821999963
+  "run_dir": "/tmp/agent-hands/runs/twin-evals/20260913T103345Z-meridian_place_hold-4ba31a",
+  "artifact_sha256": "1348d761e12214de0ff44f2c0808a1fef170832510d6fe0ac5e8a8f5167ca758",
+  "elapsed_s": 1.1814000720005424
 }

@@ -1,0 +1,15 @@
+{
+  "verdict": "VERIFIED_COMMITTED",
+  "reason": "durable state observed OPEN -> HOLD within the observation window; executor reported success. Window attribution only: this does not establish that this run caused the change",
+  "retry_eligible": false,
+  "executor_claim": true,
+  "executor_kind": "success",
+  "target_pre": "OPEN",
+  "target_post": "HOLD",
+  "collateral_changes": [],
+  "inputs_sha256": "dcd76172a93dcfd8099e1ef1337cb84366d0ed51568433a49036904995924c63",
+  "attribution": "window",
+  "pre_observed_at": "2026-09-13T10:30:03.549+00:00",
+  "post_observed_at": "2026-09-13T10:30:05.882+00:00",
+  "observation_window_ms": 2333
+}

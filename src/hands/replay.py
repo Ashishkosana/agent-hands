@@ -202,12 +202,23 @@ class ReplayEngine:
         # risky step is observed dispatching a business mutation.
         self._hazard: _Hazard | None = None
 
+    def _reset_run_state(self) -> None:
+        """Clear per-run attribution FIRST, before validation or the risk
+        gate can return early. A refused run never creates a run directory;
+        leaving the previous run's ``last_run_dir`` in place made the API
+        envelope attribute the refusal — and, now, that run's audit-chain
+        tip — to an unrelated, earlier run."""
+        self.last_run_dir = None
+        self._hazard = None
+        self._dispatch_mark = 0
+
     def run(
         self,
         capability: Capability,
         params: dict[str, str],
         observe: Observer | None = None,
     ) -> ReplayResult:
+        self._reset_run_state()
         self._validate_params(capability, params)
         # The mutating-by-default posture's teeth: risky steps do not replay
         # unattended until a human has reviewed the diffable artifact and
@@ -227,8 +238,6 @@ class ReplayEngine:
             )
         run_dir = new_run_dir(self.config.runs_dir, capability.name)
         self.last_run_dir = run_dir  # so a caller (the API/dashboard) can find this run's evidence
-        self._hazard = None
-        self._dispatch_mark = 0
         surface = WebSurface(
             headed=self.config.headed, attempt_timeout_ms=self.config.attempt_timeout_ms
         )

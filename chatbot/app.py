@@ -117,6 +117,11 @@ def _render(envelope: dict[str, Any]) -> str:
     if kind == "failure":
         rep = result["report"]
         return f"It stopped at step {rep['step_id']} — {rep['observed']}"
+    if kind == "unresolved":
+        return (
+            f"I acted at step {result['step_id']} but never saw the answer, so I can't say "
+            "whether it went through. Do not retry until the record has been checked."
+        )
     if kind == "precondition_failed":
         return f"The system wasn't in the right state: {result['unmet']}"
     if kind == "policy_violation":

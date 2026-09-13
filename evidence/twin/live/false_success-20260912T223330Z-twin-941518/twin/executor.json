@@ -1,0 +1,12 @@
+{
+  "result_kind": "success",
+  "result": {
+    "result": "success",
+    "outputs": {
+      "confirmation_number": "CN000000"
+    }
+  },
+  "run_dir": "/tmp/agent-hands/runs/twin-live/20260912T223332Z-meridian_place_hold-bd2987",
+  "artifact_sha256": "f2f3f0709f14129b796149e92728c9363ab18a1914d970398c5367772fca3cfd",
+  "elapsed_s": 1.7959583629999543
+}

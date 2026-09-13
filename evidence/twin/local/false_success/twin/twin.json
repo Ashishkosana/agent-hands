@@ -1,0 +1,182 @@
+{
+  "twin_id": "20260912T223014Z-twin-4da6bf",
+  "started_at": "2026-09-12T22:30:14.048+00:00",
+  "fault_mode": "FALSE_SUCCESS",
+  "expected": {
+    "member_number": "100234",
+    "share_id": "100234-S0070",
+    "from_status": "OPEN",
+    "to_status": "HOLD"
+  },
+  "executed": true,
+  "aborted": null,
+  "pre": {
+    "ok": true,
+    "observation": {
+      "kind": "share_statuses",
+      "member_number": "100234",
+      "shares": [
+        {
+          "share_id": "100234-S0001",
+          "type": "Regular Shares",
+          "status": "OPEN",
+          "status_raw": "OPEN"
+        },
+        {
+          "share_id": "100234-S0070",
+          "type": "Share Draft (Checking)",
+          "status": "OPEN",
+          "status_raw": "OPEN"
+        }
+      ],
+      "observed_at": "2026-09-12T22:30:15.224+00:00",
+      "page_url": "http://127.0.0.1:52575/members/100234"
+    },
+    "result_kind": "success",
+    "result": {
+      "result": "success",
+      "outputs": {},
+      "observation": {
+        "kind": "share_statuses",
+        "member_number": "100234",
+        "shares": [
+          {
+            "share_id": "100234-S0001",
+            "type": "Regular Shares",
+            "status": "OPEN",
+            "status_raw": "OPEN"
+          },
+          {
+            "share_id": "100234-S0070",
+            "type": "Share Draft (Checking)",
+            "status": "OPEN",
+            "status_raw": "OPEN"
+          }
+        ],
+        "observed_at": "2026-09-12T22:30:15.224+00:00",
+        "page_url": "http://127.0.0.1:52575/members/100234"
+      }
+    },
+    "run_dir": "/tmp/agent-hands/runs/twin-evals/20260912T223014Z-meridian_member_record-e31266",
+    "artifact_sha256": "56c58e0a668b593c259de32f87a64e01d248ced57c6878a72f70415d5abd8794",
+    "read_only_violations": [],
+    "error": null,
+    "elapsed_s": 1.0501036750010826,
+    "operator_id": "teller1"
+  },
+  "executor": {
+    "result_kind": "success",
+    "result": {
+      "result": "success",
+      "outputs": {
+        "confirmation_number": "CN000000"
+      }
+    },
+    "run_dir": "/tmp/agent-hands/runs/twin-evals/20260912T223015Z-meridian_place_hold-dc2ccf",
+    "artifact_sha256": "6e406b77114ad5a3d80a5c194767ad3fccf55c05f0c00ce37c1e43badb861508",
+    "elapsed_s": 1.2201728350009944
+  },
+  "post": {
+    "ok": true,
+    "observation": {
+      "kind": "share_statuses",
+      "member_number": "100234",
+      "shares": [
+        {
+          "share_id": "100234-S0001",
+          "type": "Regular Shares",
+          "status": "OPEN",
+          "status_raw": "OPEN"
+        },
+        {
+          "share_id": "100234-S0070",
+          "type": "Share Draft (Checking)",
+          "status": "OPEN",
+          "status_raw": "OPEN"
+        }
+      ],
+      "observed_at": "2026-09-12T22:30:17.590+00:00",
+      "page_url": "http://127.0.0.1:52575/members/100234"
+    },
+    "result_kind": "success",
+    "result": {
+      "result": "success",
+      "outputs": {},
+      "observation": {
+        "kind": "share_statuses",
+        "member_number": "100234",
+        "shares": [
+          {
+            "share_id": "100234-S0001",
+            "type": "Regular Shares",
+            "status": "OPEN",
+            "status_raw": "OPEN"
+          },
+          {
+            "share_id": "100234-S0070",
+            "type": "Share Draft (Checking)",
+            "status": "OPEN",
+            "status_raw": "OPEN"
+          }
+        ],
+        "observed_at": "2026-09-12T22:30:17.590+00:00",
+        "page_url": "http://127.0.0.1:52575/members/100234"
+      }
+    },
+    "run_dir": "/tmp/agent-hands/runs/twin-evals/20260912T223016Z-meridian_member_record-1e1690",
+    "artifact_sha256": "56c58e0a668b593c259de32f87a64e01d248ced57c6878a72f70415d5abd8794",
+    "read_only_violations": [],
+    "error": null,
+    "elapsed_s": 0.9516166079993127,
+    "operator_id": "teller1"
+  },
+  "reconciliation": {
+    "verdict": "EFFECT_MISMATCH",
+    "reason": "executor reported success but durable state is unchanged (OPEN)",
+    "retry_eligible": false,
+    "executor_claim": true,
+    "executor_kind": "success",
+    "target_pre": "OPEN",
+    "target_post": "OPEN",
+    "collateral_changes": [],
+    "inputs_sha256": "35a7c38f081e3c9415d83c97613f3ab623b6083cc1c9296d8365b0bdc0a62be9"
+  },
+  "manifest": {
+    "twin_dir": "/tmp/agent-hands/runs/twin-evals/20260912T223014Z-twin-4da6bf",
+    "fault_mode": "FALSE_SUCCESS",
+    "chaos_fired": [
+      {
+        "mode": "FALSE_SUCCESS",
+        "url": "http://127.0.0.1:52575/members/100234/hold/post",
+        "method": "POST",
+        "forwarded": false,
+        "fabricated": "ACCOUNT HOLD APPLIED"
+      }
+    ],
+    "executor_artifact_sha256": "6e406b77114ad5a3d80a5c194767ad3fccf55c05f0c00ce37c1e43badb861508",
+    "verifier_artifact_sha256": "56c58e0a668b593c259de32f87a64e01d248ced57c6878a72f70415d5abd8794",
+    "run_dirs": {
+      "twin": "/tmp/agent-hands/runs/twin-evals/20260912T223014Z-twin-4da6bf",
+      "pre_verifier": "/tmp/agent-hands/runs/twin-evals/20260912T223014Z-meridian_member_record-e31266",
+      "executor": "/tmp/agent-hands/runs/twin-evals/20260912T223015Z-meridian_place_hold-dc2ccf",
+      "post_verifier": "/tmp/agent-hands/runs/twin-evals/20260912T223016Z-meridian_member_record-1e1690"
+    },
+    "trace_sha256": {
+      "twin": "b0870b457d7ce258ab07655221ddf7dfd1f54b4428c4ed6295d83937ffbbca7a",
+      "pre_verifier": "7f44f1cb0423a0db9d7fa0a8e18938b567c40ae6a398ba07cf4e5085c6c93900",
+      "executor": "0a6d94b387aa587bb693b2fe111c6d3affafd8ee696f88f2558c9ceed2c659ff",
+      "post_verifier": "928ae586eb4fb3bc1a4d9b19710db6ad4355d540493e852d0b7a9ca48aa880d9"
+    },
+    "trace_chain_intact": {
+      "twin": true,
+      "pre_verifier": true,
+      "executor": true,
+      "post_verifier": true
+    },
+    "durations_s": {
+      "pre_image": 1.25,
+      "executor": 1.22,
+      "post_image": 1.141
+    }
+  }
+}

@@ -4,6 +4,10 @@ Every replay ends in exactly one of these shapes. The distinction that matters:
 a BusinessOutcome is a legitimate *answer* the caller needs ("no such member"),
 not a malfunction. Conflating answers with failures is the classic mistake in
 this problem domain, so the contract makes the distinction structural.
+
+The second distinction that matters: a Failure is a claim that the flow did
+NOT do the thing; an Unresolved is the refusal to make that claim, because a
+consequential action was performed and its answer never came back.
 """
 
 from __future__ import annotations
@@ -28,6 +32,11 @@ class MatchEvidence(BaseModel):
 class Success(BaseModel):
     result: Literal["success"] = "success"
     outputs: dict[str, OutputValue]
+    # Raw perception recorded by a caller-supplied observer after the checkpoint
+    # verified (see ReplayEngine.run(observe=...)). Observations are facts about
+    # the page, never a judgment; the verifier path uses this and the reconciler
+    # owns the interpretation.
+    observation: dict[str, object] | None = None
 
 
 class BusinessOutcome(BaseModel):
@@ -53,6 +62,22 @@ class Failure(BaseModel):
     report: FailureReport
 
 
+class Unresolved(BaseModel):
+    """A consequential (risky) step's action ran, and the engine could not
+    observe its outcome before the budget expired. This is NOT a failure
+    claim: the server may or may not have committed. ``dispatched`` records
+    whether a mutating request was seen leaving the browser (the only fact
+    the executor has). The caller must not retry blindly; an independent
+    read of durable state (hands.verifier + hands.reconcile) is the safe
+    next step."""
+
+    result: Literal["unresolved"] = "unresolved"
+    step_id: str
+    intent: str
+    dispatched: bool
+    report: FailureReport
+
+
 class PreconditionFailed(BaseModel):
     """The environment is wrong (not authenticated, wrong entry state) — distinct
     from a step failure so the caller isn't misled by a locator error on a login
@@ -74,6 +99,6 @@ class PolicyViolation(BaseModel):
 
 
 ReplayResult = Annotated[
-    Success | BusinessOutcome | Failure | PreconditionFailed | PolicyViolation,
+    Success | BusinessOutcome | Failure | Unresolved | PreconditionFailed | PolicyViolation,
     Field(discriminator="result"),
 ]

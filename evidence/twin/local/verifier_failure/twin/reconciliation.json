@@ -1,0 +1,11 @@
+{
+  "verdict": "UNVERIFIABLE",
+  "reason": "post-image unavailable: durable state could not be read",
+  "retry_eligible": false,
+  "executor_claim": true,
+  "executor_kind": "success",
+  "target_pre": "OPEN",
+  "target_post": null,
+  "collateral_changes": [],
+  "inputs_sha256": "2d1983961ccf5999075f92301265543a07f0714f3f1b6c0d39682acc9d50f7a1"
+}

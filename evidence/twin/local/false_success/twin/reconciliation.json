@@ -1,0 +1,11 @@
+{
+  "verdict": "EFFECT_MISMATCH",
+  "reason": "executor reported success but durable state is unchanged (OPEN)",
+  "retry_eligible": false,
+  "executor_claim": true,
+  "executor_kind": "success",
+  "target_pre": "OPEN",
+  "target_post": "OPEN",
+  "collateral_changes": [],
+  "inputs_sha256": "35a7c38f081e3c9415d83c97613f3ab623b6083cc1c9296d8365b0bdc0a62be9"
+}

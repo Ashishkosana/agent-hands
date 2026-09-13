@@ -1,0 +1,86 @@
+{
+  "twin_id": "20260912T223206Z-twin-524caa",
+  "started_at": "2026-09-12T22:32:06.817+00:00",
+  "fault_mode": null,
+  "expected": {
+    "member_number": "103001",
+    "share_id": "103001-S0001",
+    "from_status": "OPEN",
+    "to_status": "HOLD"
+  },
+  "executed": false,
+  "aborted": "pre-image shows 103001-S0001 = 'HOLD', not 'OPEN'; execution refused",
+  "pre": {
+    "ok": true,
+    "observation": {
+      "kind": "share_statuses",
+      "member_number": "103001",
+      "shares": [
+        {
+          "share_id": "103001-S0001",
+          "type": "Regular Shares",
+          "status": "HOLD",
+          "status_raw": "HOLD [HOLD]"
+        }
+      ],
+      "observed_at": "2026-09-12T22:32:07.901+00:00",
+      "page_url": "http://127.0.0.1:52575/members/103001"
+    },
+    "result_kind": "success",
+    "result": {
+      "result": "success",
+      "outputs": {},
+      "observation": {
+        "kind": "share_statuses",
+        "member_number": "103001",
+        "shares": [
+          {
+            "share_id": "103001-S0001",
+            "type": "Regular Shares",
+            "status": "HOLD",
+            "status_raw": "HOLD [HOLD]"
+          }
+        ],
+        "observed_at": "2026-09-12T22:32:07.901+00:00",
+        "page_url": "http://127.0.0.1:52575/members/103001"
+      }
+    },
+    "run_dir": "/tmp/agent-hands/runs/twin-evals/20260912T223206Z-meridian_member_record-b72247",
+    "artifact_sha256": "56c58e0a668b593c259de32f87a64e01d248ced57c6878a72f70415d5abd8794",
+    "read_only_violations": [],
+    "error": null,
+    "elapsed_s": 0.966788933999851,
+    "operator_id": "teller1"
+  },
+  "executor": null,
+  "post": null,
+  "reconciliation": null,
+  "manifest": {
+    "twin_dir": "/tmp/agent-hands/runs/twin-evals/20260912T223206Z-twin-524caa",
+    "fault_mode": null,
+    "chaos_fired": [],
+    "executor_artifact_sha256": "6e406b77114ad5a3d80a5c194767ad3fccf55c05f0c00ce37c1e43badb861508",
+    "verifier_artifact_sha256": "56c58e0a668b593c259de32f87a64e01d248ced57c6878a72f70415d5abd8794",
+    "run_dirs": {
+      "twin": "/tmp/agent-hands/runs/twin-evals/20260912T223206Z-twin-524caa",
+      "pre_verifier": "/tmp/agent-hands/runs/twin-evals/20260912T223206Z-meridian_member_record-b72247",
+      "executor": null,
+      "post_verifier": null
+    },
+    "trace_sha256": {
+      "twin": "1518cbb780f807bfa9bf1a9c8eeae0105de2729e217d7ed6e1a38cba4b412c92",
+      "pre_verifier": "3043ee508364797531d59c6bad03f2785c9998c98b6f928a55a69c65ffcf0a63",
+      "executor": null,
+      "post_verifier": null
+    },
+    "trace_chain_intact": {
+      "twin": true,
+      "pre_verifier": true,
+      "executor": null,
+      "post_verifier": null
+    },
+    "durations_s": {
+      "pre_image": 1.156
+    }
+  }
+}

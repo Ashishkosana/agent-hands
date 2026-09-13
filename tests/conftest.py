@@ -4,6 +4,7 @@ import socket
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from collections.abc import Iterator
 from pathlib import Path
@@ -83,3 +84,54 @@ def capability(fixture_app: str) -> Capability:
     cap = load_capability(ARTIFACT_PATH)
     cap.target.entry.web.url = fixture_app + "/"
     return cap
+
+
+# ----------------------------------------------------------- MERIDIAN fixture
+
+
+def _spawn(module: str, port: int, probe_path: str) -> subprocess.Popen[bytes]:
+    proc = subprocess.Popen(
+        [sys.executable, "-m", module, "--port", str(port)],
+        cwd=REPO_ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    base = f"http://127.0.0.1:{port}"
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(base + probe_path, timeout=1):
+                return proc
+        except urllib.error.HTTPError:
+            return proc  # served (a 3xx/4xx is still 'up')
+        except OSError:
+            time.sleep(0.1)
+    proc.terminate()
+    raise RuntimeError(f"{module} did not start")
+
+
+@pytest.fixture(scope="session")
+def meridian_app() -> Iterator[str]:
+    """The MERIDIAN-shaped local fixture (fixture/meridian.py), as a real
+    subprocess. Its state persists across tests; use meridian_reset."""
+    port = _free_port()
+    proc = _spawn("fixture.meridian", port, "/signon")
+    yield f"http://127.0.0.1:{port}"
+    proc.terminate()
+    proc.wait(timeout=10)
+
+
+def meridian_reset(base_url: str) -> None:
+    request = urllib.request.Request(base_url + "/__reset", method="POST")
+    with urllib.request.urlopen(request, timeout=5) as response:
+        response.read()
+
+
+def meridian_truth(base_url: str) -> dict[str, object]:
+    """Ground truth straight from the fixture's state — what actually
+    happened, independent of any UI reading."""
+    import json as _json
+
+    with urllib.request.urlopen(base_url + "/__state", timeout=5) as response:
+        data: dict[str, object] = _json.loads(response.read())
+        return data

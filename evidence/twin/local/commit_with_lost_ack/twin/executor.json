@@ -1,0 +1,20 @@
+{
+  "result_kind": "unresolved",
+  "result": {
+    "result": "unresolved",
+    "step_id": "s13",
+    "intent": "Apply the hold",
+    "dispatched": true,
+    "report": {
+      "step_id": "s13",
+      "intent": "Apply the hold",
+      "expected": "a visible heading named 'ACCOUNT HOLD APPLIED'",
+      "observed": "postconditions still unmet at chrome-error://chromewebdata/",
+      "screenshot_path": "/tmp/agent-hands/runs/twin-evals/20260912T222741Z-meridian_place_hold-a0ed4a/failure.png",
+      "snapshot_path": "/tmp/agent-hands/runs/twin-evals/20260912T222741Z-meridian_place_hold-a0ed4a/failure-a11y.txt"
+    }
+  },
+  "run_dir": "/tmp/agent-hands/runs/twin-evals/20260912T222741Z-meridian_place_hold-a0ed4a",
+  "artifact_sha256": "6e406b77114ad5a3d80a5c194767ad3fccf55c05f0c00ce37c1e43badb861508",
+  "elapsed_s": 5.316560465000293
+}

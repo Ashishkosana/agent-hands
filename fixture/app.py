@@ -76,6 +76,12 @@ FAULTS: dict[str, bool] = {
     "app_error": False,
     # UI drift stand-in: the search field's label renders as "Member Number".
     "renamed_label": False,
+    # Legacy-page stand-in: every page pulls a harmless tracking pixel from a
+    # host outside the allowlist (a different hostname for the same loopback
+    # interface). The pixel is blocked at the network layer and nothing on the
+    # page depends on it; used to prove a blocked subresource does not rename
+    # an unrelated later failure as a policy violation.
+    "external_asset": False,
 }
 
 SLOW_LOAD_SECONDS = 5.0
@@ -129,6 +135,10 @@ def _parse_enabled(value: object) -> bool | None:
 def create_app() -> Flask:
     """Build the Flask app with all routes registered."""
     app = Flask(__name__)
+
+    @app.context_processor
+    def _faults_for_templates() -> dict[str, bool]:
+        return {"external_asset": FAULTS["external_asset"]}
 
     @app.get("/")
     def shell() -> str:

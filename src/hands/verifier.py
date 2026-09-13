@@ -13,9 +13,12 @@ Independence, stated precisely (no more than the target actually provides):
   Playwright instance. It has no handle to the executor's page, cookies, or
   in-memory state, and cannot be handed one.
 - Read-only, enforced at the network layer, not by trusting step labels. A
-  ``ReadOnlyGuard`` aborts any non-GET request on the verifier's surface
-  except the sign-on POST (session establishment). An attempt is recorded in
-  the report as a violation; the run does not silently continue as if it
+  ``ReadOnlyGuard`` is installed context-wide (every page, popup and frame
+  the verifier's browser context opens) and aborts any non-GET request
+  except a POST whose path is exactly a session-establishment path (the
+  sign-on, ``/signon`` — the same policy list the engine uses to keep
+  authentication separate from business mutation). An attempt is recorded
+  in the report as a violation; the run does not silently continue as if it
   were read-only.
 - Same credentials class. MERIDIAN's demo operators share one password and
   both roles can read member records; the verifier may sign on as a
@@ -36,7 +39,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import subprocess
 import sys
 import time
@@ -56,13 +58,20 @@ from hands.artifact import (
     load_capability,
 )
 from hands.chaos import ChaosMode, FaultInjector
-from hands.replay import EngineConfig, ReplayEngine, masked_result
+from hands.replay import EngineConfig, PolicySettings, ReplayEngine, masked_result
 from hands.results import ReplayResult, Success
-from hands.surface import RequestInterceptor, SurfaceError, WebSurface
+from hands.surface import (
+    RequestInterceptor,
+    SurfaceError,
+    WebSurface,
+    is_session_establishment,
+)
 
-# Session establishment on the MERIDIAN-shaped console: the one POST a
-# read-only observer must be allowed to make.
-SESSION_ESTABLISHMENT_RE = re.compile(r"/signon$")
+# Session establishment: the one kind of POST a read-only observer must be
+# allowed to make. Same list the engine's policy uses (exact path match).
+SESSION_ESTABLISHMENT_PATHS: tuple[str, ...] = tuple(
+    PolicySettings().session_establishment_paths
+)
 SHARE_TABLE_HEADER = "Share ID"
 
 
@@ -149,18 +158,23 @@ def observe_share_statuses(surface: WebSurface) -> dict[str, object]:
 
 
 class ReadOnlyGuard:
-    """Network-layer read-only enforcement for the verifier's surface."""
+    """Network-layer read-only enforcement for the verifier's surface.
 
-    def __init__(self, allow: re.Pattern[str] = SESSION_ESTABLISHMENT_RE) -> None:
-        self.allow = allow
+    Allowed through: GET (any), and POST to exactly a session-establishment
+    path. Everything else non-GET is aborted and recorded. The host is not
+    re-checked here because the allowlist runs first on the same route."""
+
+    def __init__(self, allow_paths: tuple[str, ...] = SESSION_ESTABLISHMENT_PATHS) -> None:
+        self.allow_paths = allow_paths
         self.violations: list[str] = []
 
     def __call__(self, route: Route, request: PwRequest) -> bool:
-        if request.method.upper() == "GET":
+        method = request.method.upper()
+        if method == "GET":
             return False
-        if self.allow.search(request.url.split("?", 1)[0]):
+        if method == "POST" and is_session_establishment(request.url, self.allow_paths):
             return False
-        self.violations.append(f"{request.method.upper()} {request.url}")
+        self.violations.append(f"{method} {request.url}")
         route.abort("accessdenied")
         return True
 

@@ -16,13 +16,19 @@ Retry rules: a step marked risky is never re-attempted — a click that timed
 out may still have landed server-side, and double-firing an irreversible
 action is the one failure this engine must make structurally impossible.
 
-Unresolved rule: when a risky step's action has RUN and its outcome cannot be
-observed within budget, the engine returns UNRESOLVED, not FAILURE. A failure
-is a claim that nothing happened; after a consequential action was performed
-the engine has no basis for that claim. The result records whether a
-mutating request was seen leaving the browser — the one fact the executor
-does have. Establishing what actually happened is the job of an independent
-read of durable state (hands.verifier / hands.reconcile), never of a retry.
+Unresolved rule: UNRESOLVED requires credible evidence that a consequential
+business mutation may have been dispatched without a definitive observed
+outcome. Concretely: a step labeled ``risky`` was observed sending a non-GET
+request that is not session establishment (the sign-on POST is authentication,
+modeled separately — a failed sign-on is a FAILURE, never ambiguity). From that
+moment the run carries a *consequential-action hazard* for its remainder: any
+later failure — the risky step's own postcondition, a later step, the identity
+checkpoint, output extraction — is returned as UNRESOLVED, because a FAILURE
+is a claim that nothing happened and the engine no longer has a basis for
+that claim. A definite server answer (a recognized business outcome) is not a
+failure and resolves the hazard. Establishing what actually happened is the
+job of an independent read of durable state (hands.verifier /
+hands.reconcile), never of a retry.
 """
 
 from __future__ import annotations
@@ -112,6 +118,13 @@ class PolicySettings:
 
     allowed_hosts: list[str] | None = None  # None -> derive from entry URL
     require_risk_review: bool = True
+    # URL paths whose non-GET request establishes a session rather than
+    # mutating business state. Authentication is modeled separately from
+    # consequential mutation: a sign-on POST never creates a consequential-
+    # action hazard, so bad credentials are a FAILURE, not UNRESOLVED. Exact
+    # path match (see surface.is_session_establishment). The default covers
+    # the MERIDIAN console this repository targets; other targets set theirs.
+    session_establishment_paths: list[str] = field(default_factory=lambda: ["/signon"])
 
 
 @dataclass
@@ -137,10 +150,23 @@ class _Recognized(Exception):
         self.outcome = outcome
 
 
+@dataclass(frozen=True)
+class _Hazard:
+    """Run-scope record that a consequential action may have reached the
+    server: the risky step whose action was observed dispatching a mutation-
+    kind request. Set once per run, never cleared by later steps; only a
+    definite outcome (success through the checkpoint, or a recognized
+    business outcome) ends the run without it mattering."""
+
+    step_id: str
+    intent: str
+    requests: tuple[str, ...]  # "METHOD url" of the observed mutation dispatches
+
+
 class _StepFailed(Exception):
     """``unresolved`` marks a failure the engine may NOT claim as "nothing
-    happened": a risky step's action ran first. ``dispatched`` records whether
-    a mutating request was observed leaving the browser during that step."""
+    happened": a consequential mutation was observed leaving the browser
+    first. ``dispatched`` records that observation."""
 
     def __init__(
         self, report: FailureReport, *, unresolved: bool = False, dispatched: bool = False
@@ -172,6 +198,9 @@ class ReplayEngine:
         # Count of dispatched (non-GET) requests when the current step began;
         # "did this step's action leave the browser" is measured against it.
         self._dispatch_mark = 0
+        # The run's consequential-action hazard (see _Hazard); None until a
+        # risky step is observed dispatching a business mutation.
+        self._hazard: _Hazard | None = None
 
     def run(
         self,
@@ -198,6 +227,8 @@ class ReplayEngine:
             )
         run_dir = new_run_dir(self.config.runs_dir, capability.name)
         self.last_run_dir = run_dir  # so a caller (the API/dashboard) can find this run's evidence
+        self._hazard = None
+        self._dispatch_mark = 0
         surface = WebSurface(
             headed=self.config.headed, attempt_timeout_ms=self.config.attempt_timeout_ms
         )
@@ -237,31 +268,42 @@ class ReplayEngine:
                     on_human_event=on_human_event,
                     allowed_hosts=allowed_hosts,
                     interceptor=self.config.interceptor,
+                    session_establishment_paths=self.config.policy.session_establishment_paths,
                 )
                 result = self._execute(capability, params, surface, trace, run_dir, observe)
                 if surface.blocked_requests:
                     trace.emit("policy_blocked_requests", urls=surface.blocked_requests[:10])
             except _Recognized as hit:
+                # A recognized business outcome is a DEFINITE server answer,
+                # so it stands even after a consequential dispatch: the server
+                # said no (or said something specific); nothing is ambiguous.
                 result = hit.outcome
             except _StepFailed as failed:
-                if failed.unresolved:
-                    # A consequential action ran and its answer never came
-                    # back. Refusing to call that a failure is the point:
-                    # the caller gets UNRESOLVED plus the one fact we have.
+                hazard = self._hazard
+                if failed.unresolved or hazard is not None:
+                    # A consequential mutation left the browser at some point
+                    # in this run and the run did not reach a definite end.
+                    # Whatever failed afterwards — the risky step's own
+                    # postcondition, a later step, the checkpoint, an output —
+                    # the engine has no basis to claim nothing happened. The
+                    # caller gets UNRESOLVED, named for the action in doubt,
+                    # plus the failure that left it in doubt.
                     shot, snap = surface.capture_evidence(run_dir)
                     failed.report.screenshot_path = shot
                     failed.report.snapshot_path = snap
                     result = Unresolved(
-                        step_id=failed.report.step_id or "?",
-                        intent=failed.report.intent or "?",
-                        dispatched=failed.dispatched,
+                        step_id=hazard.step_id if hazard else (failed.report.step_id or "?"),
+                        intent=hazard.intent if hazard else (failed.report.intent or "?"),
+                        dispatched=hazard is not None or failed.dispatched,
                         report=failed.report,
                     )
                     trace.emit(
                         "unresolved",
-                        step=failed.report.step_id,
-                        dispatched=failed.dispatched,
+                        step=result.step_id,
+                        dispatched=result.dispatched,
+                        failed_at=failed.report.step_id or failed.report.intent,
                         observed=failed.report.observed,
+                        hazard_requests=list(hazard.requests) if hazard else [],
                     )
                     trace.emit("run_finished", result=masked_result(capability, result))
                     return result
@@ -437,27 +479,58 @@ class ReplayEngine:
             )
         except _StepFailed as failed:
             # The act itself errored. For a risky step that is only a clean
-            # FAILURE if nothing left the browser; a click that dispatched a
-            # request and then errored (e.g. the navigation died) is unresolved.
-            if step.risk == "risky" and self._step_dispatched(surface):
+            # FAILURE if no business mutation left the browser; a click that
+            # dispatched one and then errored (the navigation died) is
+            # unresolved.
+            if self._note_hazard(surface, trace, step):
                 failed.unresolved = True
                 failed.dispatched = True
             raise
+        self._note_hazard(surface, trace, step)
         try:
             self._await_post(
                 capability, params, surface, trace, step, armed, suppressed, resolved, deadline
             )
         except _StepFailed as failed:
-            # The action RAN and its postcondition never appeared. A risky
-            # step may not call that a failure: the server may have committed.
-            if step.risk == "risky":
+            # The action RAN and its postcondition never appeared. If a
+            # business mutation was observed leaving the browser the server
+            # may have committed, and this may not be called a failure. If
+            # nothing consequential was sent (a sign-on that bounced, a click
+            # the page swallowed) it IS a failure, whatever the step's label.
+            if self._note_hazard(surface, trace, step):
                 failed.unresolved = True
-                failed.dispatched = self._step_dispatched(surface)
+                failed.dispatched = True
             raise
         return suppressed
 
+    def _step_mutations(self, surface: WebSurface) -> list[str]:
+        """Mutation-kind dispatches observed since the current step began.
+        Session-establishment requests are excluded by construction."""
+        return [
+            f"{d.method} {d.url}"
+            for d in surface.dispatched[self._dispatch_mark:]
+            if d.kind == "mutation"
+        ]
+
     def _step_dispatched(self, surface: WebSurface) -> bool:
-        return len(surface.dispatched) > self._dispatch_mark
+        return bool(self._step_mutations(surface))
+
+    def _note_hazard(self, surface: WebSurface, trace: Trace, step: Step) -> bool:
+        """Record the run's consequential-action hazard if this risky step
+        was observed dispatching a business mutation. Returns whether it
+        did. Idempotent: the first hazard of a run is the one that names
+        the UNRESOLVED result; later risky dispatches are traced only."""
+        if step.risk != "risky":
+            return False
+        requests = self._step_mutations(surface)
+        if not requests:
+            return False
+        if self._hazard is None:
+            self._hazard = _Hazard(step_id=step.id, intent=step.intent, requests=tuple(requests))
+            trace.emit("consequential_dispatch", step=step.id, requests=requests)
+        elif self._hazard.step_id != step.id:
+            trace.emit("consequential_dispatch", step=step.id, requests=requests)
+        return True
 
     def _act_with_retries(
         self,
@@ -661,7 +734,10 @@ class ReplayEngine:
             # Re-running the step after its action may already have landed
             # server-side would double-fire an irreversible action. Recovery
             # cannot make that safe; a human can (escalation), or an
-            # independent verifier can establish what happened (unresolved).
+            # independent verifier can establish what happened. Whether the
+            # result is UNRESOLVED or a plain FAILURE depends on the one fact
+            # available: was a business mutation observed leaving the browser?
+            dispatched = self._step_dispatched(surface)
             raise _StepFailed(
                 FailureReport(
                     step_id=step.id,
@@ -670,14 +746,30 @@ class ReplayEngine:
                     observed=f"recoverable condition {cond.id!r} interrupted a risky step "
                     f"post-action; escalation to a human is the safe path",
                 ),
-                unresolved=True,
-                dispatched=self._step_dispatched(surface),
+                unresolved=dispatched,
+                dispatched=dispatched,
+            )
+        if cond.resume == "retry_current_step":
+            resume_at = current
+        else:
+            assert cond.restart_from is not None  # guaranteed by the schema validator
+            resume_at = step_order[cond.restart_from]
+        if self._hazard is not None and resume_at <= step_order[self._hazard.step_id]:
+            # Resuming at or before the consequential step would re-run it.
+            # No recovery is worth a possible double-fire; the run ends
+            # UNRESOLVED (the hazard is set) for a verifier to settle.
+            raise _StepFailed(
+                FailureReport(
+                    step_id=step.id if step is not None else None,
+                    intent=f"recover from condition {cond.id!r}",
+                    expected="a resume point after the consequential step "
+                    f"{self._hazard.step_id!r}",
+                    observed=f"recovery for {cond.id!r} would resume at step index {resume_at}, "
+                    f"re-running a consequential action whose outcome is not yet known",
+                )
             )
         self._run_recovery(capability, params, surface, trace, cond)
-        if cond.resume == "retry_current_step":
-            return current
-        assert cond.restart_from is not None  # guaranteed by the schema validator
-        return step_order[cond.restart_from]
+        return resume_at
 
     def _run_recovery(
         self,
@@ -954,7 +1046,21 @@ class ReplayEngine:
             return total
         for i in reversed(range(total)):
             if self._step_post_holds(capability, params, surface, capability.steps[i]):
-                return i + 1
+                resume_at = i + 1
+                hazard = self._hazard
+                if hazard is not None and resume_at <= next(
+                    j for j, s in enumerate(capability.steps) if s.id == hazard.step_id
+                ):
+                    raise _StepFailed(
+                        FailureReport(
+                            step_id=hazard.step_id,
+                            intent=hazard.intent,
+                            expected="a resume point after the consequential step",
+                            observed=f"handback frontier is step index {resume_at}, at or before "
+                            f"the consequential step {hazard.step_id!r}; resuming would re-run it",
+                        )
+                    )
+                return resume_at
         if current_step is not None and current_step.risk == "risky":
             raise _StepFailed(
                 FailureReport(

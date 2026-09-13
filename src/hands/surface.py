@@ -15,9 +15,10 @@ from __future__ import annotations
 
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlparse
 
 from playwright.sync_api import (
@@ -47,6 +48,7 @@ from hands.artifact import (
 )
 
 __all__ = [
+    "DispatchKind",
     "DispatchedRequest",
     "FingerprintMismatch",
     "PlaywrightError",
@@ -58,6 +60,7 @@ __all__ = [
     "TargetNotFound",
     "WebSurface",
     "describe_rung",
+    "is_session_establishment",
 ]
 
 # A hook at the network layer, consulted for every ON-allowlist request AFTER
@@ -68,15 +71,31 @@ __all__ = [
 RequestInterceptor = Callable[[Route, PwRequest], bool]
 
 
+DispatchKind = Literal["session", "mutation"]
+
+
 @dataclass(frozen=True)
 class DispatchedRequest:
     """A non-GET request the browser was observed sending. Recorded at the
     request event — i.e. BEFORE any routing decision — so it reflects what
-    left the page, not what reached the server."""
+    left the page, not what reached the server.
+
+    ``kind`` separates authentication from business effect: a request to a
+    session-establishment path (the sign-on POST) is ``"session"``; every
+    other non-GET is ``"mutation"``. Only the latter is credible evidence
+    that a consequential business action may have reached the server."""
 
     method: str
     url: str
     ts: float
+    kind: DispatchKind = "mutation"
+
+
+def is_session_establishment(url: str, paths: Sequence[str]) -> bool:
+    """True when ``url``'s path is exactly one of the session-establishment
+    paths. Exact path equality, deliberately: a suffix match would also
+    accept ``/members/1/signon`` or ``/signon/anything``."""
+    return urlparse(url).path in set(paths)
 
 
 class SurfaceError(Exception):
@@ -197,24 +216,34 @@ class WebSurface:
         on_human_event: Callable[[dict[str, object]], None] | None = None,
         allowed_hosts: list[str] | None = None,
         interceptor: RequestInterceptor | None = None,
+        session_establishment_paths: Sequence[str] = (),
     ) -> None:
         self._playwright = sync_playwright().start()
         self._browser = self._playwright.chromium.launch(headless=not self._headed)
         self._page = self._browser.new_page()
+        context = self._page.context
         self.blocked_requests: list[str] = []
-        # Every non-GET request the page dispatches, in order. The engine uses
-        # this to tell "a consequential request left the browser and its answer
-        # never came back" (UNRESOLVED) from "nothing was ever sent" (FAILURE).
+        # Every non-GET request the context dispatches, in order. The engine
+        # uses the "mutation"-kind entries to tell "a consequential request
+        # left the browser and its answer never came back" (UNRESOLVED) from
+        # "nothing was ever sent" (FAILURE). Sign-on POSTs are "session".
         self.dispatched: list[DispatchedRequest] = []
+        session_paths = tuple(session_establishment_paths)
 
         def record_dispatch(request: PwRequest) -> None:
             method = request.method.upper()
             if method != "GET":
+                kind: DispatchKind = (
+                    "session" if is_session_establishment(request.url, session_paths)
+                    else "mutation"
+                )
                 self.dispatched.append(
-                    DispatchedRequest(method=method, url=request.url, ts=time.time())
+                    DispatchedRequest(method=method, url=request.url, ts=time.time(), kind=kind)
                 )
 
-        self._page.on("request", record_dispatch)
+        # Context-wide, not page-wide: a popup or a second tab opened by the
+        # target is a new Page in the same context and must be observed too.
+        context.on("request", record_dispatch)
         if allowed_hosts is not None or interceptor is not None:
             allowed = set(allowed_hosts) if allowed_hosts is not None else None
 
@@ -229,9 +258,9 @@ class WebSurface:
                 route.continue_()
 
             # Network-layer enforcement: context-wide routing covers every
-            # request — clicks, redirects, popups, iframes, subresources —
-            # not just navigations the engine initiates itself.
-            self._page.route("**/*", enforce)
+            # request — clicks, redirects, popups, iframes, subresources, and
+            # pages the target opens — not just the page the engine drives.
+            context.route("**/*", enforce)
         if on_human_event is not None:
             self._page.expose_binding(
                 "__handsHumanEvent",

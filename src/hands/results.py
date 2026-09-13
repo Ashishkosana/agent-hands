@@ -63,13 +63,19 @@ class Failure(BaseModel):
 
 
 class Unresolved(BaseModel):
-    """A consequential (risky) step's action ran, and the engine could not
-    observe its outcome before the budget expired. This is NOT a failure
-    claim: the server may or may not have committed. ``dispatched`` records
-    whether a mutating request was seen leaving the browser (the only fact
-    the executor has). The caller must not retry blindly; an independent
-    read of durable state (hands.verifier + hands.reconcile) is the safe
-    next step."""
+    """A consequential (risky) step was observed dispatching a business
+    mutation, and the run then failed to reach a definite end — the step's
+    own postcondition, a later step, the identity checkpoint, or output
+    extraction failed. This is NOT a failure claim: the server may or may
+    not have committed, and the engine has no basis to say which.
+
+    ``step_id``/``intent`` name the consequential action whose outcome is in
+    doubt; ``report`` describes the failure that left it in doubt (which may
+    belong to a later step or to the checkpoint). ``dispatched`` is True
+    when a mutation-kind request was seen leaving the browser (the only fact
+    the executor has; session-establishment POSTs do not count). The caller
+    must not retry blindly; an independent read of durable state
+    (hands.verifier + hands.reconcile) is the safe next step."""
 
     result: Literal["unresolved"] = "unresolved"
     step_id: str

@@ -18,13 +18,30 @@ The discipline that makes the experiment honest:
   which breaks the verifier's own read path (its report must then be
   UNVERIFIABLE, never a guess).
 - Everything an injector did is recorded in ``fired`` for the evidence
-  bundle, and is NOT an input to the reconciler.
+  bundle, and is NOT an input to the reconciler. In particular the upstream
+  HTTP status recorded for a forwarded request is a fact about the transport,
+  not evidence of commit: MERIDIAN answers validation refusals with 200 too.
+  Only the verifier's read of durable state says what happened.
+
+Modes added for the review findings:
+
+- COMMIT_WITH_CORRUPT_ACK / COMMIT_WITH_CORRUPT_OUTPUT forward the real
+  request (the server commits) and return the REAL acknowledgement page with
+  one thing broken — the identity the checkpoint binds to, or the cell the
+  output is read from. The executor's risky step succeeds; a later phase
+  fails. These probe that uncertainty is preserved past the risky step.
+- THIRD_PARTY_MUTATION drops the executor's request and, in its place, lets
+  a separate actor (a callback the harness supplies — a different session,
+  outside the browser) mutate the same target. The durable state then
+  changes for a reason that is not this run. It exists to show what the
+  window-attribution verdict does and does not claim.
 """
 
 from __future__ import annotations
 
 import html
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from urllib.parse import parse_qs
@@ -38,6 +55,14 @@ class ChaosMode(StrEnum):
     NO_COMMIT_WITH_LOST_ACK = "NO_COMMIT_WITH_LOST_ACK"
     FALSE_SUCCESS = "FALSE_SUCCESS"
     VERIFIER_FAILURE = "VERIFIER_FAILURE"
+    COMMIT_WITH_CORRUPT_ACK = "COMMIT_WITH_CORRUPT_ACK"
+    COMMIT_WITH_CORRUPT_OUTPUT = "COMMIT_WITH_CORRUPT_OUTPUT"
+    THIRD_PARTY_MUTATION = "THIRD_PARTY_MUTATION"
+
+
+# For THIRD_PARTY_MUTATION: called with (member, share_id) parsed from the
+# dropped request; must mutate the target through its own, separate session.
+ThirdParty = Callable[[str, str], None]
 
 
 # The consequential request of the hold flow, as the live console shapes it.
@@ -91,6 +116,7 @@ class FaultInjector:
     target: re.Pattern[str] | None = None
     once: bool | None = None
     fired: list[dict[str, object]] = field(default_factory=list)
+    third_party: ThirdParty | None = None  # required for THIRD_PARTY_MUTATION
 
     def __post_init__(self) -> None:
         if self.target is None:
@@ -121,9 +147,51 @@ class FaultInjector:
             # Forward the real request; the real server commits (or not — that
             # is ITS decision). Then withhold the answer from the browser.
             response = route.fetch()
-            record["server_status"] = response.status
+            record["forwarded"] = True
+            # Transport fact only. A 200 here is NOT evidence of commit.
+            record["upstream_http_status"] = response.status
             record["response_withheld"] = True
             route.abort("connectionreset")
+        elif self.mode in (ChaosMode.COMMIT_WITH_CORRUPT_ACK,
+                           ChaosMode.COMMIT_WITH_CORRUPT_OUTPUT):
+            # Forward the real request, then hand the browser the real
+            # acknowledgement with one thing broken. The heading survives,
+            # so the risky step's own postcondition is met; what fails is a
+            # LATER phase of the run (checkpoint identity, or output read).
+            response = route.fetch()
+            record["forwarded"] = True
+            record["upstream_http_status"] = response.status
+            body = response.text()
+            member = match.group("member")
+            if self.mode is ChaosMode.COMMIT_WITH_CORRUPT_ACK:
+                # Strip the member identity everywhere on the page: the
+                # identity-bound checkpoint can no longer verify.
+                corrupted = body.replace(member, "\u2022" * len(member))
+                record["corrupted"] = "identity"
+            else:
+                # Remove the cell the confirmation number is read from: the
+                # checkpoint (heading + identity) still verifies; extraction
+                # of the output fails.
+                corrupted = re.sub(
+                    r"(Confirmation:</td>)\s*<td>.*?</td>", r"\1", body, count=1, flags=re.S
+                )
+                record["corrupted"] = "output"
+            record["ack_altered"] = corrupted != body
+            route.fulfill(
+                status=response.status,
+                headers={"content-type": response.headers.get("content-type", "text/html")},
+                body=corrupted,
+            )
+        elif self.mode is ChaosMode.THIRD_PARTY_MUTATION:
+            # This run's request never reaches the server. A different actor
+            # mutates the same target instead, through its own session.
+            assert self.third_party is not None, "THIRD_PARTY_MUTATION needs a third_party"
+            form = parse_qs(request.post_data or "")
+            share_id = (form.get("share") or ["?"])[0]
+            record["forwarded"] = False
+            self.third_party(match.group("member"), share_id)
+            record["third_party_mutated"] = share_id
+            route.abort("connectionfailed")
         elif self.mode is ChaosMode.NO_COMMIT_WITH_LOST_ACK:
             record["forwarded"] = False
             route.abort("connectionfailed")

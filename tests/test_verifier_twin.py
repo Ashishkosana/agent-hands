@@ -94,15 +94,19 @@ def test_commit_with_lost_ack_executor_cannot_know_verifier_can(
     fresh: str, artifacts: dict[str, Path], tmp_path: Path
 ) -> None:
     run, injector = twin(artifacts, tmp_path, executor_chaos=ChaosMode.COMMIT_WITH_LOST_ACK)
-    assert injector is not None and injector.fired[0]["server_status"] == 200
+    assert injector is not None and injector.fired[0]["forwarded"] is True
     assert injector.fired[0]["response_withheld"] is True
+    # The upstream status is a transport fact recorded for the bundle; it is
+    # not (and is not named as) evidence of commit.
+    assert "server_status" not in injector.fired[0]
     # The executor refused to claim either way — and recorded the one fact it had.
     assert run.executor is not None and run.executor.result_kind == "unresolved"
     assert run.executor.result["dispatched"] is True
-    # Durable state moved; the independent read saw it; the reconciler attributed it.
+    # Durable state moved; the independent read saw it across the window.
     assert truth(fresh) == "HOLD"
     assert verdict_of(run) == Verdict.VERIFIED_COMMITTED
     assert run.reconciliation is not None and run.reconciliation.executor_claim is None
+    assert run.reconciliation.attribution == "window"
 
 
 def test_no_commit_with_lost_ack_is_verified_not_committed_and_nothing_is_retried(

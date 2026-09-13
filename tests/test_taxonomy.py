@@ -170,13 +170,85 @@ def test_risky_step_is_never_retried_after_its_action_ran(
             step=risky_step,
         )
     assert "never auto-retried" in failure.value.report.expected
-    # Post-action interruption of a risky step is an UNRESOLVED outcome for an
-    # independent verifier to settle, not a FAILURE the caller may retry.
-    assert failure.value.unresolved is True
+    # Nothing consequential was observed leaving the browser, so this is a
+    # plain FAILURE (still never retried) — not ambiguity about a commit.
+    assert failure.value.unresolved is False
+
+
+def test_risky_step_interrupted_after_a_mutation_dispatch_is_unresolved(
+    capability: Capability, tmp_path: Path
+) -> None:
+    """Same interruption, but a business mutation WAS observed leaving the
+    browser during the step: the server may have committed, so the result
+    must preserve that uncertainty (UNRESOLVED), never claim FAILURE."""
+    risky_step = capability.steps[1]
+    risky_step.risk = "risky"
+    condition = next(c for c in capability.conditions if c.id == "session_expired")
+    hit = RecognizerHit(
+        condition=condition,
+        evidence=MatchEvidence(condition_id=condition.id, matched_text="Session Expired"),
+    )
+    from hands.replay import _StepFailed
+    from hands.surface import DispatchedRequest
+
+    eng = engine(tmp_path)
+    surface = _NullSurface()
+    surface.dispatched.append(
+        DispatchedRequest(method="POST", url="http://t/members/1/hold/post", ts=0.0)
+    )
+    with pytest.raises(_StepFailed) as failure:
+        eng._recover(
+            capability,
+            {"member_id": "12345"},
+            surface=surface,  # type: ignore[arg-type]
+            trace=_NullTrace(),  # type: ignore[arg-type]
+            rec=_Recover(hit, acted=True),
+            fires={},
+            step_order={s.id: i for i, s in enumerate(capability.steps)},
+            current=1,
+            step=risky_step,
+        )
+    assert failure.value.unresolved is True and failure.value.dispatched is True
+
+
+def test_session_establishment_dispatch_is_not_a_mutation(
+    capability: Capability, tmp_path: Path
+) -> None:
+    """A sign-on POST during a risky-labeled step is authentication, not a
+    business mutation: it never makes an interruption UNRESOLVED."""
+    risky_step = capability.steps[1]
+    risky_step.risk = "risky"
+    condition = next(c for c in capability.conditions if c.id == "session_expired")
+    hit = RecognizerHit(
+        condition=condition,
+        evidence=MatchEvidence(condition_id=condition.id, matched_text="Session Expired"),
+    )
+    from hands.replay import _StepFailed
+    from hands.surface import DispatchedRequest
+
+    eng = engine(tmp_path)
+    surface = _NullSurface()
+    surface.dispatched.append(
+        DispatchedRequest(method="POST", url="http://t/signon", ts=0.0, kind="session")
+    )
+    with pytest.raises(_StepFailed) as failure:
+        eng._recover(
+            capability,
+            {"member_id": "12345"},
+            surface=surface,  # type: ignore[arg-type]
+            trace=_NullTrace(),  # type: ignore[arg-type]
+            rec=_Recover(hit, acted=True),
+            fires={},
+            step_order={s.id: i for i, s in enumerate(capability.steps)},
+            current=1,
+            step=risky_step,
+        )
+    assert failure.value.unresolved is False
 
 
 class _NullSurface:
-    """Stands in for a WebSurface that never had a browser: nothing dispatched."""
+    """Stands in for a WebSurface that never had a browser: nothing dispatched
+    unless a test appends to ``dispatched`` itself."""
 
     def __init__(self) -> None:
         self.dispatched: list[object] = []

@@ -226,10 +226,18 @@ HOLD_APPLIED_BODY = """<h1>ACCOUNT HOLD APPLIED</h1><br>
 </table></div><br>
 <a href="/members/{{ member }}">Return to Member Record</a> &nbsp;&middot;&nbsp; <a href="/menu">Main Menu</a>"""
 
-VALIDATION_BODY = """<h1>{{ heading }}</h1><br>
+# The console's definite refusal page, worded as the live console words it
+# (probed 2026-09-13: HTTP 400 for an unknown share or stale token; no heading;
+# the same wording is what a recognizer must key on). The fixture serves it
+# with HTTP 200 on purpose: a refusal is a refusal whatever the status code,
+# and nothing downstream may treat 200 as evidence of commit. ``detail`` is
+# fixture-only diagnostics, not part of the live wording.
+VALIDATION_BODY = """<br>
 <table border="0" cellpadding="6" cellspacing="0" class="box"><tr><td>
-<font class="err">The request could not be validated:</font> {{ detail }}
-</td></tr></table><br><a href="/members/{{ member }}">Return to Member Record</a>"""
+<font class="err">TRANSACTION REJECTED</font><br>
+The transaction could not be completed as entered. Please review the field values and resubmit.
+<br><font size="1">(fixture detail: {{ detail }})</font>
+</td></tr></table><br><a href="/members/{{ member }}">Return to previous screen</a>"""
 
 
 def create_app() -> Flask:
@@ -367,6 +375,12 @@ def create_app() -> Flask:
             return render("Place Account Hold", VALIDATION_BODY, heading="PLACE ACCOUNT HOLD",
                           detail="unknown share.", member=number)
         if share.status == "HOLD":
+            # Fixture-modeled refusal. The live console does NOT refuse here:
+            # re-holding an already-HOLD share is accepted idempotently with a
+            # fresh confirmation number (probed 2026-09-13, CN480003/CN480004).
+            # The fixture keeps the refusal because a definite server "no"
+            # after a consequential dispatch is a case the executor must
+            # classify as a business outcome, never as UNRESOLVED.
             return render("Place Account Hold", VALIDATION_BODY, heading="PLACE ACCOUNT HOLD",
                           detail="share is already on hold.", member=number)
         share.status = "HOLD"

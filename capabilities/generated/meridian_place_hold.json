@@ -66,6 +66,9 @@
   "outcomes": {
     "SUPERVISOR_REQUIRED": {
       "description": "This operator is not authorized; a supervisor must complete the hold."
+    },
+    "TRANSACTION_REJECTED": {
+      "description": "The console refused the hold as entered (validation). A definite server answer: nothing was posted, and the same input will be refused again."
     }
   },
   "outputs": {
@@ -135,6 +138,22 @@
           "anchor": {
             "strategy": "text",
             "text": "SUPERVISOR OVERRIDE REQUIRED"
+          },
+          "container": "table"
+        }
+      ],
+      "context": [],
+      "fingerprint": null,
+      "fragile": false
+    },
+    "outcome_rejected": {
+      "ladder": [
+        {
+          "strategy": "relative",
+          "relation": "container_of",
+          "anchor": {
+            "strategy": "text",
+            "text": "TRANSACTION REJECTED"
           },
           "container": "table"
         }
@@ -726,6 +745,25 @@
       "max_fires_per_run": 2,
       "provenance": "authored",
       "verified_by_eval": false
+    },
+    {
+      "id": "cond_transaction_rejected",
+      "armed_after": "s8",
+      "match": {
+        "kind": "region_text",
+        "region": "outcome_rejected",
+        "patterns": [
+          "could not be completed as entered"
+        ]
+      },
+      "classify": "business_outcome",
+      "outcome_code": "TRANSACTION_REJECTED",
+      "recovery": [],
+      "resume": null,
+      "restart_from": null,
+      "max_fires_per_run": 2,
+      "provenance": "authored",
+      "verified_by_eval": false
     }
   ],
   "checkpoint": {
@@ -746,7 +784,7 @@
   "allow_unbound_checkpoint": false,
   "recorded_by": null,
   "risk_review": {
-    "reviewed_by": "ashish",
-    "artifact_hash": "671bd54b463afb070faebc5bd069addb1b09fa7a1ea4f39900c2fbb29012ccfd"
+    "reviewed_by": null,
+    "artifact_hash": null
   }
 }

@@ -469,7 +469,7 @@
   "allow_unbound_checkpoint": false,
   "recorded_by": null,
   "risk_review": {
-    "reviewed_by": "cursor-agent",
-    "artifact_hash": "177d568d49fef666ec99feabf1943a4917c78054b6999a5f91373b1bf2d3137e"
+    "reviewed_by": null,
+    "artifact_hash": null
   }
 }

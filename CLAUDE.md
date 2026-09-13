@@ -25,12 +25,14 @@ implementation detail below that line.
    every resolved element is fingerprint-verified and every extracted value is
    parse-verified against recorded expectations.
 3. **A business outcome is an answer, not an error.** The result contract is
-   five-way (see below); a caller can enumerate every code it may receive.
+   six-way (see below); a caller can enumerate every code it may receive.
 4. **Irreversible (`risky`) actions are never auto-retried and never replayed
-   unattended without a human-signed, hash-bound review.** When a risky
-   action's outcome is unknown the result is `UNRESOLVED`; only an independent
-   read-only verifier (`docs/VERIFIER_TWINS.md`) may settle it, and it must
-   say `UNVERIFIABLE` rather than guess.
+   unattended without a human-signed, hash-bound review.** Once a risky step
+   is observed dispatching a business mutation (sign-on POSTs are
+   authentication, not mutation), any later failure in that run is
+   `UNRESOLVED`, never `FAILURE`; only an independent read-only verifier
+   (`docs/VERIFIER_TWINS.md`) may settle it, its verdict is window
+   attribution (not causal), and it must say `UNVERIFIABLE` rather than guess.
 5. **Replay sends nothing to any model, ever** — enforced by `tests/test_zero_llm.py`
    (fresh subprocess, keys stripped, non-loopback sockets blocked).
 
@@ -99,9 +101,9 @@ rewrite — the schema is already surface-neutral.
 | file | responsibility |
 |---|---|
 | `artifact.py` | **The contract.** Pydantic schema + load-time integrity validators (outcome-code closure both ways, checkpoint identity binding, param-used, region refs resolve, no secrets persisted). `risk_hash`/`sign_risk_review`/`risk_review_valid`. **Start here.** |
-| `results.py` | The `ReplayResult` union: the buildathon's 5 codes plus `Unresolved` (a `risky` step whose request left the browser but whose outcome was never seen — **not** a failure, not a success; only a verifier may settle it). `Success.observation` carries a verifier's raw readback. |
-| `replay.py` | **The engine (~1000 lines, the heart).** Deterministic execution; exception-driven control flow (`_Recognized`/`_StepFailed`/`_Recover`/`_PauseRequested`); two-level timeout model; freshness rule; no-double-fire; recovery; escalation glue; masking. No model, no coordinates, no `sleep`-as-sync. |
-| `surface.py` | Perceive/act seam. Locator-ladder resolution (0→next rung, >1→refuse), geometric relative rungs (same-row overlap, tie=ambiguity), fingerprint verification, context-wide network allowlist, human-event capture JS (semantic only). |
+| `results.py` | The `ReplayResult` union: the buildathon's 5 codes plus `Unresolved` (a `risky` step was observed dispatching a business mutation and the run then failed anywhere — its own postcondition, a later step, checkpoint, output — **not** a failure, not a success; only a verifier may settle it). `Success.observation` carries a verifier's raw readback. |
+| `replay.py` | **The engine (~1100 lines, the heart).** Deterministic execution; exception-driven control flow (`_Recognized`/`_StepFailed`/`_Recover`/`_PauseRequested`); two-level timeout model; freshness rule; no-double-fire; run-scope consequential-action hazard (`_Hazard`: set when a risky step dispatches a `mutation`-kind request; every later `_StepFailed` → `UNRESOLVED`; recovery/handback may not resume at or before it); `PolicySettings.session_establishment_paths` (`/signon`) keeps authentication out of that; recovery; escalation glue; masking. No model, no coordinates, no `sleep`-as-sync. |
+| `surface.py` | Perceive/act seam. Locator-ladder resolution (0→next rung, >1→refuse), geometric relative rungs (same-row overlap, tie=ambiguity), fingerprint verification, context-wide network allowlist + context-wide `dispatched` log (`DispatchedRequest.kind` = `session`/`mutation`), human-event capture JS (semantic only). |
 | `conditions.py` | Sensors only — **never act on the page.** `state_holds`, `post_holds`, `check_recognizers` (with freshness suppression), `matching_now`. Mid-navigation error → "not yet". |
 | `values.py` | `{param:name}` resolution; `normalize` (none/digits/money); strict en_US `parse_money` (rejects rather than mis-parses); `value_bound_in` (boundary-anchored identity, not bare substring). |
 | `planner.py` | LLM observe→decide→act loop. One tool per turn, act-by-ref only; protocol-safe (every tool call answered on the tool channel); `{param:}` placeholders keep values out of the prompt; `_RiskWatch` marks any non-GET step risky; `_settle_post` derives postconditions from what *actually changed* — no observable effect → `DistillationError`, never an invented postcondition. |
@@ -110,10 +112,10 @@ rewrite — the schema is already surface-neutral.
 | `discover.py` | Orchestration. Contract-first `DiscoveryRequest`; one happy run (steps+checkpoint+outputs) + one run **per declared outcome** (a live-verified recognizer each); `_arming_step` refuses to arm a recognizer across divergent flows. |
 | `escalation.py` | Control-token state machine (`EscalationHub`) + minimal HTTP operator console. Token is engine-owned; console posts *requests* only and never touches Playwright (sync API is thread-affine). Single owner at every moment, structurally. |
 | `trace.py` | Append-only JSONL per run under `runs/`; `tail()` feeds intervention context. |
-| `verifier.py` | **Observations only.** Runs a read-only artifact in a fresh interpreter (`python -m hands.verifier`) + fresh browser context; `ReadOnlyGuard` aborts any non-GET except `/signon`; returns `Observation` (share statuses), never a verdict. |
-| `reconcile.py` | **Pure function.** `reconcile(expected, pre, post, executor)` → `VERIFIED_COMMITTED / VERIFIED_NOT_COMMITTED / EFFECT_MISMATCH / UNVERIFIABLE`. Insufficient evidence is always `UNVERIFIABLE`; `retry_eligible` is advice nobody acts on. |
+| `verifier.py` | **Observations only.** Runs a read-only artifact in a fresh interpreter (`python -m hands.verifier`) + fresh browser context; `ReadOnlyGuard` (context-wide) aborts any non-GET except `POST` to exactly `/signon`; returns `Observation` (share statuses, `observed_at`), never a verdict. |
+| `reconcile.py` | **Pure function.** `reconcile(expected, pre, post, executor)` → `VERIFIED_COMMITTED / VERIFIED_NOT_COMMITTED / EFFECT_MISMATCH / UNVERIFIABLE`, always with `attribution="window"` + `pre/post_observed_at` + `observation_window_ms`: a verdict is about the observation window, never a causal claim about this run. Insufficient evidence is always `UNVERIFIABLE`; `retry_eligible` is advice nobody acts on. |
 | `twin.py` | Orchestrator: pre-image → (refuse if not `from_status`) → executor → post-image → reconcile; writes the evidence bundle (`expected/pre/executor/post/reconciliation/manifest.json` + hash-chained `trace.jsonl`). |
-| `chaos.py` | `FaultInjector` on the `WebSurface.start(interceptor=)` route seam: `COMMIT_WITH_LOST_ACK` (real POST forwarded, response dropped), `NO_COMMIT_WITH_LOST_ACK`, `FALSE_SUCCESS` (fabricated presentation only), `VERIFIER_FAILURE` (503 for the post-image read). Durable state is never faked. |
+| `chaos.py` | `FaultInjector` on the `WebSurface.start(interceptor=)` route seam: `COMMIT_WITH_LOST_ACK` (real POST forwarded, response dropped; `upstream_http_status` is a transport fact, not commit evidence), `NO_COMMIT_WITH_LOST_ACK`, `FALSE_SUCCESS` (fabricated presentation only), `VERIFIER_FAILURE` (503 for the post-image read), `COMMIT_WITH_CORRUPT_ACK` / `COMMIT_WITH_CORRUPT_OUTPUT` (real commit, real ack with identity / output cell broken), `THIRD_PARTY_MUTATION` (executor POST dropped, a separate session mutates). Durable state is never faked by the injector. |
 | `cli.py` | `replay` / `review` / `discover`. Exit 0 = worked (SUCCESS or BUSINESS_OUTCOME — an answer is not a malfunction); 1 = FAILURE/PRECONDITION_FAILED; 2 = usage. Discovery imports are **lazy** so replay never imports the model client. |
 
 `fixture/` = the "Fairview Teller" target (Flask, deliberately legacy table-soup
@@ -188,9 +190,12 @@ rungs + fingerprints; recognizers with provenance & arming; identity-bound
 checkpoints; supervised typed outputs; network-layer allowlist; mutating-by-
 default risk + hash-bound sign-off; escalation state machine + operator console
 + resume scan + TTL + redaction canary; hermetic zero-LLM proof; 10-scenario
-eval table; verifier twin V1 for `meridian_place_hold` (UNRESOLVED result,
-read-only subprocess verifier, pure reconciler, four chaos modes, local
-52/52 matrix + three live MERIDIAN runs — see `docs/VERIFIER_TWINS.md`).
+eval table; verifier twin V1 for `meridian_place_hold` (UNRESOLVED result
+with run-scope hazard, read-only subprocess verifier, window-attributed pure
+reconciler, seven chaos modes, local matrix + three live MERIDIAN runs — see
+`docs/VERIFIER_TWINS.md` and `evals/twin_results.md`). Both twin artifacts
+are pending human risk review (`reviewed_by: null`) — live runs refuse until
+`hands review … --operator <human>`.
 
 **Designed, not built** (see REPORT.md/DEFENSE.md — say so plainly):
 - **Multi-tenant** overlays / variants / drift-telemetry aggregation. What

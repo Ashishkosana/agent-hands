@@ -94,7 +94,8 @@ for non-sensitive params only (tested, incl. that passwords are never rewritten)
 The locator ladder (role → label → text → geometric relative → CSS) drives
 MERIDIAN's table-soup markup with no test IDs; every element is
 fingerprint-verified and every value parse-verified. Exceptional states map to the
-existing five-way taxonomy: MEMBER_NOT_FOUND is a clean **business outcome** with
+existing taxonomy (five-way at the time; six-way since `UNRESOLVED` was added — see
+`docs/VERIFIER_TWINS.md`): MEMBER_NOT_FOUND is a clean **business outcome** with
 match evidence; missing params → 400; ambiguity (element or dropdown option) →
 hard failure, never a guess; unsigned risky replay → **POLICY_VIOLATION**;
 off-allowlist traffic → POLICY_VIOLATION. Injected faults (permission/timeout/

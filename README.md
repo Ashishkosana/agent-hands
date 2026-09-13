@@ -153,21 +153,29 @@ network blocked at the socket level, and asserts success.
 
 ## Verifier twins (post-buildathon research branch)
 
-The buildathon build could say `SUCCESS`, `FAILURE`, `BUSINESS_OUTCOME`,
-`ESCALATED` or `POLICY_STOP`. It could not say the honest thing about a
-consequential action whose acknowledgement never arrived: *I don't know
-whether that committed.* This branch adds that sixth result, `UNRESOLVED`,
-and a second, read-only replayer that finds out.
+The buildathon build could say `SUCCESS`, `BUSINESS_OUTCOME`, `FAILURE`,
+`PRECONDITION_FAILED` or `POLICY_VIOLATION`. It could not say the honest
+thing about a consequential action whose acknowledgement never arrived: *I
+don't know whether that committed.* This branch adds the sixth result,
+`UNRESOLVED`, and a second, read-only replayer that finds out.
 
-- **Executor** replays `meridian_place_hold`; if the hold POST leaves the
-  browser but its outcome is never seen, the result is `UNRESOLVED`, never a
-  retry.
+- **Executor** replays `meridian_place_hold`; once the hold POST is observed
+  leaving the browser, any failure for the rest of the run — the step's own
+  postcondition, the identity checkpoint, output extraction, a later step —
+  is `UNRESOLVED`, never `FAILURE` and never a retry. Sign-on POSTs are
+  authentication, not mutation: bad credentials are a plain `FAILURE`, and a
+  definite server refusal (`TRANSACTION_REJECTED`) is a business outcome.
 - **Verifier** replays `meridian_member_record` in a fresh interpreter and
-  browser context, may only issue GETs (plus the sign-on POST), and returns
-  the share-status table as raw observations.
+  browser context, may only issue GETs (plus `POST /signon`, exact path),
+  and returns the share-status table as raw observations.
 - **Reconciler** is a pure function over expected effect, pre-image,
   post-image and executor result: `VERIFIED_COMMITTED`,
-  `VERIFIED_NOT_COMMITTED`, `EFFECT_MISMATCH`, or `UNVERIFIABLE`.
+  `VERIFIED_NOT_COMMITTED`, `EFFECT_MISMATCH`, or `UNVERIFIABLE`. Every
+  verdict is **window attribution** (`attribution = "window"`, with the two
+  observation timestamps and the window length): it says what the durable
+  state did between the two reads, not that this run caused it — a third
+  party can move the same target inside the window, and the eval includes
+  exactly that case.
 
 ```bash
 .venv/bin/python evals/run_twin_evals.py --runs 10          # local fault matrix
@@ -176,13 +184,17 @@ HANDS_PARAM_PASSWORD=... .venv/bin/python evals/run_twin_evals.py --live \
   --share-option Certificate --executor-operator super1 --verifier-operator teller1
 ```
 
-Measured: 52/52 local fault-injection runs classified as expected, 0 false
-`VERIFIED_COMMITTED`, 0 false `VERIFIED_NOT_COMMITTED`, all 10 `UNVERIFIABLE`
-verdicts attributable to the deliberately broken verifier; plus one live
+Measured (`evals/twin_results.md`, local fixture, ground truth from
+`/__state`): every fault-injection run classified as expected on both the
+verdict and the executor's result kind, 0 false `VERIFIED_COMMITTED`, 0 false
+`VERIFIED_NOT_COMMITTED`; 10/10 deliberately-unavailable-verifier runs
+abstained with `UNVERIFIABLE` and no run abstained elsewhere. Plus one live
 MERIDIAN run each of lost-ack-committed, lost-ack-not-committed, and
 false-success, all classified correctly. Local and live counts are separate
-numbers (`evals/twin_results.md`). Design, deviations and backlog:
-`docs/VERIFIER_TWINS.md`; what is and is not new: `docs/PRIOR_ART.md`.
+numbers. The twin artifacts are currently **pending human risk review**
+(`reviewed_by: null`); the live runner refuses until a human signs them.
+Design, deviations and backlog: `docs/VERIFIER_TWINS.md`; what is and is not
+new: `docs/PRIOR_ART.md`.
 
 ## Honest limitations
 

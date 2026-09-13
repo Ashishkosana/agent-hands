@@ -3,10 +3,26 @@
 Given the expected effect, the pre-image and post-image observations from
 the independent verifier, and the executor's claim, decide exactly one of:
 
-    VERIFIED_COMMITTED      durable state moved from -> to; effect attributable
-    VERIFIED_NOT_COMMITTED  durable state unchanged; nothing happened
-    EFFECT_MISMATCH         the executor's DEFINITE claim contradicts durable state
+    VERIFIED_COMMITTED      durable state was observed to move from -> to
+                            within the observation window
+    VERIFIED_NOT_COMMITTED  durable state was observed unchanged across the
+                            observation window
+    EFFECT_MISMATCH         the executor's DEFINITE claim contradicts the
+                            observed durable state
     UNVERIFIABLE            the evidence does not support any of the above
+
+What a verdict means — and does not mean. The evidence V1 has is two
+independent reads of the same record, one before the executor ran and one
+after. A verdict is therefore a statement about the *observation window*
+(``attribution = "window"``): the target's state at ``pre.observed_at`` and
+at ``post.observed_at``. It is NOT a statement that this executor invocation
+caused the change. Another actor can mutate the same target inside the
+window; MERIDIAN exposes no transaction id, correlation token, or per-hold
+operator attribution through the UI that would let this run's effect be
+told apart from a third party's. Every ``reason`` string and every field
+name here is written to that standard, and the window's bounds and length
+are recorded on the result so the limitation travels with the verdict.
+Causal attribution is a separate, unbuilt mechanism (see backlog).
 
 Design rules (the point of the module):
 
@@ -29,7 +45,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -110,6 +128,25 @@ class Reconciliation(BaseModel):
     target_post: str | None
     collateral_changes: list[str]
     inputs_sha256: str  # hash of the exact inputs judged; re-running is auditable
+    # How the verdict relates the observed change to the executor. V1 has
+    # exactly one mechanism: two reads bracketing the run. "window" means
+    # "the state changed (or did not) between these two observations" and
+    # nothing stronger; no verdict here establishes that THIS run caused it.
+    attribution: Literal["window"] = "window"
+    pre_observed_at: str | None = None
+    post_observed_at: str | None = None
+    observation_window_ms: int | None = None  # post - pre; None when either image is missing
+
+
+def _window_ms(pre: Observation | None, post: Observation | None) -> int | None:
+    if pre is None or post is None:
+        return None
+    try:
+        a = datetime.fromisoformat(pre.observed_at)
+        b = datetime.fromisoformat(post.observed_at)
+    except ValueError:
+        return None
+    return round((b - a).total_seconds() * 1000)
 
 
 def _identity_ok(expected: ExpectedEffect, image: Observation) -> bool:
@@ -149,13 +186,16 @@ def reconcile(
             verdict=v, reason=reason, retry_eligible=retry, executor_claim=claim,
             executor_kind=executor.kind, target_pre=t_pre, target_post=t_post,
             collateral_changes=collateral or [], inputs_sha256=digest,
+            pre_observed_at=None if pre is None else pre.observed_at,
+            post_observed_at=None if post is None else post.observed_at,
+            observation_window_ms=_window_ms(pre, post),
         )
 
     U = Verdict.UNVERIFIABLE
     if pre is None and post is None:
         return verdict(U, "neither pre-image nor post-image is available")
     if pre is None:
-        return verdict(U, "pre-image unavailable: the effect cannot be attributed to this run")
+        return verdict(U, "pre-image unavailable: no observation window can be established")
     if post is None:
         return verdict(U, "post-image unavailable: durable state could not be read",
                        t_pre=pre.status_of(expected.share_id))
@@ -179,7 +219,7 @@ def reconcile(
         return verdict(
             U,
             f"pre-image status {t_pre!r} is not the expected starting state "
-            f"{expected.from_status!r}; a post-image of {t_post!r} proves nothing about this run",
+            f"{expected.from_status!r}; a post-image of {t_post!r} says nothing about this window",
             t_pre=t_pre, t_post=t_post, collateral=collateral,
         )
 
@@ -188,21 +228,23 @@ def reconcile(
             return verdict(
                 Verdict.EFFECT_MISMATCH,
                 f"executor reported NOT committed ({executor.kind}"
-                f"{': ' + executor.detail if executor.detail else ''}) but durable state moved "
-                f"{t_pre} -> {t_post}",
+                f"{': ' + executor.detail if executor.detail else ''}) but durable state was "
+                f"observed {t_pre} -> {t_post} within the observation window",
                 t_pre=t_pre, t_post=t_post, collateral=collateral,
             )
-        how = "executor confirmed" if claim else "executor was unresolved"
+        how = "executor reported success" if claim else "executor was unresolved"
         return verdict(
             Verdict.VERIFIED_COMMITTED,
-            f"durable state moved {t_pre} -> {t_post}; {how}",
+            f"durable state observed {t_pre} -> {t_post} within the observation window; {how}. "
+            f"Window attribution only: this does not establish that this run caused the change",
             t_pre=t_pre, t_post=t_post, collateral=collateral,
         )
     if t_post == expected.from_status:
         if claim is True:
             return verdict(
                 Verdict.EFFECT_MISMATCH,
-                f"executor reported success but durable state is unchanged ({t_post})",
+                f"executor reported success but durable state was observed unchanged "
+                f"({t_post}) across the observation window",
                 t_pre=t_pre, t_post=t_post, collateral=collateral,
             )
         how = "executor was unresolved" if claim is None else f"executor reported {executor.kind}"
@@ -212,7 +254,7 @@ def reconcile(
         retry = executor.kind != "business_outcome"
         return verdict(
             Verdict.VERIFIED_NOT_COMMITTED,
-            f"durable state unchanged ({t_post}); {how}",
+            f"durable state observed unchanged ({t_post}) across the observation window; {how}",
             retry=retry, t_pre=t_pre, t_post=t_post, collateral=collateral,
         )
     return verdict(

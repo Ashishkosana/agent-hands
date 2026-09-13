@@ -174,3 +174,48 @@ def test_executor_claim_from_every_result_kind() -> None:
     assert ExecutorClaim.from_result(outcome).detail == "SUPERVISOR_REQUIRED"
     assert ExecutorClaim.from_result(PreconditionFailed(unmet="u", observed="o")).committed is False
     assert ExecutorClaim.from_result(PolicyViolation(rule="r", detail="d")).committed is False
+
+
+# ------------------------------------------------------- window attribution
+
+
+def _timed(target: str, at: str) -> Observation:
+    obs = image(target)
+    return obs.model_copy(update={"observed_at": at})
+
+
+def test_every_verdict_is_window_attribution_and_records_the_window() -> None:
+    pre = _timed("OPEN", "2026-09-13T10:00:00.000+00:00")
+    post = _timed("HOLD", "2026-09-13T10:00:07.250+00:00")
+    for claim in ALL_CLAIMS:
+        rec = reconcile(EXPECTED, pre, post, claim)
+        assert rec.attribution == "window"
+        assert rec.pre_observed_at == pre.observed_at
+        assert rec.post_observed_at == post.observed_at
+        assert rec.observation_window_ms == 7250
+
+
+def test_window_is_unknown_when_an_image_is_missing_or_untimed() -> None:
+    rec = reconcile(EXPECTED, image("OPEN"), None, UNRESOLVED)
+    assert rec.observation_window_ms is None and rec.post_observed_at is None
+    rec = reconcile(EXPECTED, image("OPEN"), image("HOLD"), UNRESOLVED)  # observed_at="t"
+    assert rec.observation_window_ms is None
+    assert rec.pre_observed_at == "t" and rec.post_observed_at == "t"
+
+
+def test_committed_reason_disclaims_causation_and_never_says_attributable() -> None:
+    """A third party can move the target inside the window; the words must
+    not promise more than two bracketing reads can show."""
+    for claim in (SUCCESS, UNRESOLVED):
+        rec = reconcile(EXPECTED, image("OPEN"), image("HOLD"), claim)
+        assert rec.verdict is Verdict.VERIFIED_COMMITTED
+        assert "within the observation window" in rec.reason
+        assert "does not establish that this run caused the change" in rec.reason
+    for pre, post, claim in ((image("OPEN"), image("HOLD"), FAILURE),
+                             (image("OPEN"), image("OPEN"), SUCCESS),
+                             (image("OPEN"), image("OPEN"), UNRESOLVED),
+                             (image("HOLD"), image("HOLD"), UNRESOLVED),
+                             (None, image("HOLD"), UNRESOLVED)):
+        rec = reconcile(EXPECTED, pre, post, claim)
+        assert "attributable" not in rec.reason.lower(), rec.reason
+        assert "caused by this run" not in rec.reason.lower(), rec.reason

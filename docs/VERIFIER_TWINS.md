@@ -205,13 +205,15 @@ purpose):
   → {closed, escalated}`, and an operator surface for the twin's
   `retry_eligible` advice. This subsumes the earlier "API escalation model
   for `unresolved`" item.
-- **F9 — Baseline API idempotency: TOCTOU and payload binding.** The
-  `hands.api` idempotency key is checked and then the run is executed; two
-  concurrent requests with the same key can both pass the check, and the
-  key is not bound to the request payload, so a reused key with different
-  parameters replays the first result. Needs an atomic reserve-then-run
-  store and a payload hash in the key's record. Deliberately not expanded
-  into this V1 PR.
+- **F9 — Baseline API idempotency: TOCTOU and payload binding.** *TOCTOU
+  half closed post-V1* (`fix/post-v1-audit-port`, P1): the completed-key
+  check, the run and the completed-record write are one critical section
+  under `_INVOKE_LOCK`, so two concurrent requests with the same key execute
+  once and the second receives the replayed envelope. *Still open:* the key
+  is not bound to the request payload, so a reused key with different
+  parameters replays the first result, and the completed map is in-memory
+  only, so it does not survive a restart. Needs a payload hash in the key's
+  record and a durable reserve-then-run store.
 - **Causal correlation.** Window attribution is what V1 can honestly claim.
   Establishing that *this* invocation caused a change needs a correlation
   handle the system of record exposes and the verifier can read back — a

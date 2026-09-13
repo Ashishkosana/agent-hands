@@ -1,0 +1,38 @@
+{
+  "twin_dir": "/tmp/agent-hands/runs/twin-live/20260912T223343Z-twin-dd656d",
+  "fault_mode": "COMMIT_WITH_LOST_ACK",
+  "chaos_fired": [
+    {
+      "mode": "COMMIT_WITH_LOST_ACK",
+      "url": "https://web-sample.interface-hiring.com/members/101555/hold/post",
+      "method": "POST",
+      "server_status": 200,
+      "response_withheld": true
+    }
+  ],
+  "executor_artifact_sha256": "f2f3f0709f14129b796149e92728c9363ab18a1914d970398c5367772fca3cfd",
+  "verifier_artifact_sha256": "12b033b0572ad37c0b6df8549d1f7091145cf88e8afe26eda2d462d6ba29867e",
+  "run_dirs": {
+    "twin": "/tmp/agent-hands/runs/twin-live/20260912T223343Z-twin-dd656d",
+    "pre_verifier": "/tmp/agent-hands/runs/twin-live/20260912T223344Z-meridian_member_record-fed047",
+    "executor": "/tmp/agent-hands/runs/twin-live/20260912T223345Z-meridian_place_hold-c9c809",
+    "post_verifier": "/tmp/agent-hands/runs/twin-live/20260912T223357Z-meridian_member_record-a43ffa"
+  },
+  "trace_sha256": {
+    "twin": "2ebbe5a0b03e7537d7fa3459e791b5787d09660a8a8c5efd7c690572a6e30b6a",
+    "pre_verifier": "4cb36853ce6f49103300486c30a790ba3a762699996f61df453744ac16b21e0a",
+    "executor": "e3e572fd7db81621c2e38253ccafeb1e420bdd9102f4c8e944193b8951a3113d",
+    "post_verifier": "7fc5ab93b7a0a1d1eb5f21519b788bdbb4371a978c8e6bef9cbc29559898b679"
+  },
+  "trace_chain_intact": {
+    "twin": true,
+    "pre_verifier": true,
+    "executor": true,
+    "post_verifier": true
+  },
+  "durations_s": {
+    "pre_image": 1.941,
+    "executor": 11.862,
+    "post_image": 1.926
+  }
+}

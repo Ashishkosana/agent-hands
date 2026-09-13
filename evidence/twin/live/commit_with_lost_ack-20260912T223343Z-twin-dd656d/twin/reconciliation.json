@@ -1,0 +1,11 @@
+{
+  "verdict": "VERIFIED_COMMITTED",
+  "reason": "durable state moved OPEN -> HOLD; executor was unresolved",
+  "retry_eligible": false,
+  "executor_claim": null,
+  "executor_kind": "unresolved",
+  "target_pre": "OPEN",
+  "target_post": "HOLD",
+  "collateral_changes": [],
+  "inputs_sha256": "be9160b494d8bb028ee723ce394b629296d43ea6313f17ffa9f7c6330a31946e"
+}

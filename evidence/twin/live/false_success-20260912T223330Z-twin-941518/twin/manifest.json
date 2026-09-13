@@ -1,0 +1,38 @@
+{
+  "twin_dir": "/tmp/agent-hands/runs/twin-live/20260912T223330Z-twin-941518",
+  "fault_mode": "FALSE_SUCCESS",
+  "chaos_fired": [
+    {
+      "mode": "FALSE_SUCCESS",
+      "url": "https://web-sample.interface-hiring.com/members/101555/hold/post",
+      "method": "POST",
+      "forwarded": false,
+      "fabricated": "ACCOUNT HOLD APPLIED"
+    }
+  ],
+  "executor_artifact_sha256": "f2f3f0709f14129b796149e92728c9363ab18a1914d970398c5367772fca3cfd",
+  "verifier_artifact_sha256": "12b033b0572ad37c0b6df8549d1f7091145cf88e8afe26eda2d462d6ba29867e",
+  "run_dirs": {
+    "twin": "/tmp/agent-hands/runs/twin-live/20260912T223330Z-twin-941518",
+    "pre_verifier": "/tmp/agent-hands/runs/twin-live/20260912T223330Z-meridian_member_record-cee21e",
+    "executor": "/tmp/agent-hands/runs/twin-live/20260912T223332Z-meridian_place_hold-bd2987",
+    "post_verifier": "/tmp/agent-hands/runs/twin-live/20260912T223334Z-meridian_member_record-0bcf5c"
+  },
+  "trace_sha256": {
+    "twin": "b089f6a0e54e649308fd9a3f8bf03fff826ed130481d337905462a8daa8e89b3",
+    "pre_verifier": "0d6dd3b3ea4da388c1db125768ae35cfacfc941278ecbf2bdb320a4695182c88",
+    "executor": "ed7dea20c3bef8a5ad31c0eeb47e7ea2ec0550ab566b270c736395d4d5159777",
+    "post_verifier": "fea2102927e4dc79b7addacb3920980713d044a1d5d750ba8db054876883127a"
+  },
+  "trace_chain_intact": {
+    "twin": true,
+    "pre_verifier": true,
+    "executor": true,
+    "post_verifier": true
+  },
+  "durations_s": {
+    "pre_image": 1.727,
+    "executor": 1.796,
+    "post_image": 1.703
+  }
+}

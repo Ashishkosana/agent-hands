@@ -125,8 +125,8 @@ and the one a real discovery run produced (its transcript is in `/evidence/`).
 ## Verify the claims
 
 ```bash
-.venv/bin/pytest                      # 85 tests: schema, ladder semantics, taxonomy,
-                                      # escalation/handoff, policy, hermetic zero-LLM proof
+.venv/bin/pytest                      # 137 tests: schema, ladder semantics, taxonomy,
+                                      # escalation/handoff, policy, zero-LLM proof, verifier twin
 .venv/bin/python evals/run_evals.py   # regenerates evals/results.md
 .venv/bin/ruff check . && .venv/bin/mypy
 ```
@@ -147,7 +147,54 @@ network blocked at the socket level, and asserts success.
 | `fixture/` | the target app: table-soup markup, no test IDs, injectable runtime faults |
 | `capabilities/` | artifacts + discovery requests |
 | `evidence/` · `evals/` | run records and measured results |
+| `src/hands/verifier.py` · `reconcile.py` · `twin.py` · `chaos.py` | verifier twin: read-only observer, pure reconciler, orchestrator, fault injection |
+| `fixture/meridian.py` | MERIDIAN-shaped local fixture with a ground-truth endpoint for chaos evals |
 | `docs/DESIGN.md` | the full design, including decisions considered and rejected |
+
+## Verifier twins (post-buildathon research branch)
+
+The buildathon build could say `SUCCESS`, `BUSINESS_OUTCOME`, `FAILURE`,
+`PRECONDITION_FAILED` or `POLICY_VIOLATION`. It could not say the honest
+thing about a consequential action whose acknowledgement never arrived: *I
+don't know whether that committed.* This branch adds the sixth result,
+`UNRESOLVED`, and a second, read-only replayer that finds out.
+
+- **Executor** replays `meridian_place_hold`; once the hold POST is observed
+  leaving the browser, any failure for the rest of the run — the step's own
+  postcondition, the identity checkpoint, output extraction, a later step —
+  is `UNRESOLVED`, never `FAILURE` and never a retry. Sign-on POSTs are
+  authentication, not mutation: bad credentials are a plain `FAILURE`, and a
+  definite server refusal (`TRANSACTION_REJECTED`) is a business outcome.
+- **Verifier** replays `meridian_member_record` in a fresh interpreter and
+  browser context, may only issue GETs (plus `POST /signon`, exact path),
+  and returns the share-status table as raw observations.
+- **Reconciler** is a pure function over expected effect, pre-image,
+  post-image and executor result: `VERIFIED_COMMITTED`,
+  `VERIFIED_NOT_COMMITTED`, `EFFECT_MISMATCH`, or `UNVERIFIABLE`. Every
+  verdict is **window attribution** (`attribution = "window"`, with the two
+  observation timestamps and the window length): it says what the durable
+  state did between the two reads, not that this run caused it — a third
+  party can move the same target inside the window, and the eval includes
+  exactly that case.
+
+```bash
+.venv/bin/python evals/run_twin_evals.py --runs 10          # local fault matrix
+HANDS_PARAM_PASSWORD=... .venv/bin/python evals/run_twin_evals.py --live \
+  --live-scenario COMMIT_WITH_LOST_ACK --member 101555 --share 101555-CERT \
+  --share-option Certificate --executor-operator super1 --verifier-operator teller1
+```
+
+Measured (`evals/twin_results.md`, local fixture, ground truth from
+`/__state`): every fault-injection run classified as expected on both the
+verdict and the executor's result kind, 0 false `VERIFIED_COMMITTED`, 0 false
+`VERIFIED_NOT_COMMITTED`; 10/10 deliberately-unavailable-verifier runs
+abstained with `UNVERIFIABLE` and no run abstained elsewhere. Plus one live
+MERIDIAN run each of lost-ack-committed, lost-ack-not-committed, and
+false-success, all classified correctly. Local and live counts are separate
+numbers. The twin artifacts are currently **pending human risk review**
+(`reviewed_by: null`); the live runner refuses until a human signs them.
+Design, deviations and backlog: `docs/VERIFIER_TWINS.md`; what is and is not
+new: `docs/PRIOR_ART.md`.
 
 ## Honest limitations
 

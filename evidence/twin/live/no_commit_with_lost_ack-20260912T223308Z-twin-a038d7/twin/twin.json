@@ -1,0 +1,189 @@
+{
+  "twin_id": "20260912T223308Z-twin-a038d7",
+  "started_at": "2026-09-12T22:33:08.490+00:00",
+  "fault_mode": "NO_COMMIT_WITH_LOST_ACK",
+  "expected": {
+    "member_number": "101555",
+    "share_id": "101555-CERT",
+    "from_status": "OPEN",
+    "to_status": "HOLD"
+  },
+  "executed": true,
+  "aborted": null,
+  "pre": {
+    "ok": true,
+    "observation": {
+      "kind": "share_statuses",
+      "member_number": "101555",
+      "shares": [
+        {
+          "share_id": "101555-S0001",
+          "type": "Regular Shares",
+          "status": "OPEN",
+          "status_raw": "OPEN"
+        },
+        {
+          "share_id": "101555-CERT",
+          "type": "Certificate",
+          "status": "OPEN",
+          "status_raw": "OPEN"
+        }
+      ],
+      "observed_at": "2026-09-12T22:33:10.119+00:00",
+      "page_url": "https://web-sample.interface-hiring.com/members/101555"
+    },
+    "result_kind": "success",
+    "result": {
+      "result": "success",
+      "outputs": {},
+      "observation": {
+        "kind": "share_statuses",
+        "member_number": "101555",
+        "shares": [
+          {
+            "share_id": "101555-S0001",
+            "type": "Regular Shares",
+            "status": "OPEN",
+            "status_raw": "OPEN"
+          },
+          {
+            "share_id": "101555-CERT",
+            "type": "Certificate",
+            "status": "OPEN",
+            "status_raw": "OPEN"
+          }
+        ],
+        "observed_at": "2026-09-12T22:33:10.119+00:00",
+        "page_url": "https://web-sample.interface-hiring.com/members/101555"
+      }
+    },
+    "run_dir": "/tmp/agent-hands/runs/twin-live/20260912T223308Z-meridian_member_record-5ed5f3",
+    "artifact_sha256": "12b033b0572ad37c0b6df8549d1f7091145cf88e8afe26eda2d462d6ba29867e",
+    "read_only_violations": [],
+    "error": null,
+    "elapsed_s": 1.4951819329999125,
+    "operator_id": "teller1"
+  },
+  "executor": {
+    "result_kind": "unresolved",
+    "result": {
+      "result": "unresolved",
+      "step_id": "s13",
+      "intent": "Apply the hold",
+      "dispatched": true,
+      "report": {
+        "step_id": "s13",
+        "intent": "Apply the hold",
+        "expected": "a visible heading named 'ACCOUNT HOLD APPLIED'",
+        "observed": "postconditions still unmet at chrome-error://chromewebdata/",
+        "screenshot_path": "/tmp/agent-hands/runs/twin-live/20260912T223310Z-meridian_place_hold-eba768/failure.png",
+        "snapshot_path": "/tmp/agent-hands/runs/twin-live/20260912T223310Z-meridian_place_hold-eba768/failure-a11y.txt"
+      }
+    },
+    "run_dir": "/tmp/agent-hands/runs/twin-live/20260912T223310Z-meridian_place_hold-eba768",
+    "artifact_sha256": "f2f3f0709f14129b796149e92728c9363ab18a1914d970398c5367772fca3cfd",
+    "elapsed_s": 11.906662706000134
+  },
+  "post": {
+    "ok": true,
+    "observation": {
+      "kind": "share_statuses",
+      "member_number": "101555",
+      "shares": [
+        {
+          "share_id": "101555-S0001",
+          "type": "Regular Shares",
+          "status": "OPEN",
+          "status_raw": "OPEN"
+        },
+        {
+          "share_id": "101555-CERT",
+          "type": "Certificate",
+          "status": "OPEN",
+          "status_raw": "OPEN"
+        }
+      ],
+      "observed_at": "2026-09-12T22:33:23.628+00:00",
+      "page_url": "https://web-sample.interface-hiring.com/members/101555"
+    },
+    "result_kind": "success",
+    "result": {
+      "result": "success",
+      "outputs": {},
+      "observation": {
+        "kind": "share_statuses",
+        "member_number": "101555",
+        "shares": [
+          {
+            "share_id": "101555-S0001",
+            "type": "Regular Shares",
+            "status": "OPEN",
+            "status_raw": "OPEN"
+          },
+          {
+            "share_id": "101555-CERT",
+            "type": "Certificate",
+            "status": "OPEN",
+            "status_raw": "OPEN"
+          }
+        ],
+        "observed_at": "2026-09-12T22:33:23.628+00:00",
+        "page_url": "https://web-sample.interface-hiring.com/members/101555"
+      }
+    },
+    "run_dir": "/tmp/agent-hands/runs/twin-live/20260912T223322Z-meridian_member_record-feea43",
+    "artifact_sha256": "12b033b0572ad37c0b6df8549d1f7091145cf88e8afe26eda2d462d6ba29867e",
+    "read_only_violations": [],
+    "error": null,
+    "elapsed_s": 1.424913431999812,
+    "operator_id": "teller1"
+  },
+  "reconciliation": {
+    "verdict": "VERIFIED_NOT_COMMITTED",
+    "reason": "durable state unchanged (OPEN); executor was unresolved",
+    "retry_eligible": true,
+    "executor_claim": null,
+    "executor_kind": "unresolved",
+    "target_pre": "OPEN",
+    "target_post": "OPEN",
+    "collateral_changes": [],
+    "inputs_sha256": "91792eef4f811dc35b8365ca0eb5c1a3b727c07133a2594a5b33a434ef42f41d"
+  },
+  "manifest": {
+    "twin_dir": "/tmp/agent-hands/runs/twin-live/20260912T223308Z-twin-a038d7",
+    "fault_mode": "NO_COMMIT_WITH_LOST_ACK",
+    "chaos_fired": [
+      {
+        "mode": "NO_COMMIT_WITH_LOST_ACK",
+        "url": "https://web-sample.interface-hiring.com/members/101555/hold/post",
+        "method": "POST",
+        "forwarded": false
+      }
+    ],
+    "executor_artifact_sha256": "f2f3f0709f14129b796149e92728c9363ab18a1914d970398c5367772fca3cfd",
+    "verifier_artifact_sha256": "12b033b0572ad37c0b6df8549d1f7091145cf88e8afe26eda2d462d6ba29867e",
+    "run_dirs": {
+      "twin": "/tmp/agent-hands/runs/twin-live/20260912T223308Z-twin-a038d7",
+      "pre_verifier": "/tmp/agent-hands/runs/twin-live/20260912T223308Z-meridian_member_record-5ed5f3",
+      "executor": "/tmp/agent-hands/runs/twin-live/20260912T223310Z-meridian_place_hold-eba768",
+      "post_verifier": "/tmp/agent-hands/runs/twin-live/20260912T223322Z-meridian_member_record-feea43"
+    },
+    "trace_sha256": {
+      "twin": "bb2667605497d3c82443ee9926af4ab3f05c8d75d5ac48995a8f3e72487d0bfb",
+      "pre_verifier": "f5be67ddc10896af1f8665ee364877e096a7c501b6952a7af8398e2b7b824ea1",
+      "executor": "13a1c6a0c2772d01b1da4f0de2785bd74eaec258ab28afcbadcd8c329e6c05c3",
+      "post_verifier": "7141b65d449ebd9afc74e34e2ddad76ff35631f394a76c2d3e2467a89bb01feb"
+    },
+    "trace_chain_intact": {
+      "twin": true,
+      "pre_verifier": true,
+      "executor": true,
+      "post_verifier": true
+    },
+    "durations_s": {
+      "pre_image": 1.688,
+      "executor": 11.907,
+      "post_image": 1.615
+    }
+  }
+}

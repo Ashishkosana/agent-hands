@@ -1,0 +1,37 @@
+{
+  "twin_dir": "/tmp/agent-hands/runs/twin-evals/20260913T103153Z-twin-66f57e",
+  "fault_mode": "NO_COMMIT_WITH_LOST_ACK",
+  "chaos_fired": [
+    {
+      "mode": "NO_COMMIT_WITH_LOST_ACK",
+      "url": "http://127.0.0.1:60475/members/100234/hold/post",
+      "method": "POST",
+      "forwarded": false
+    }
+  ],
+  "executor_artifact_sha256": "1348d761e12214de0ff44f2c0808a1fef170832510d6fe0ac5e8a8f5167ca758",
+  "verifier_artifact_sha256": "5a2ef36bc249093e4774999b55a35b255200c1706ef1a3979ed5afaf6943e2a6",
+  "run_dirs": {
+    "twin": "/tmp/agent-hands/runs/twin-evals/20260913T103153Z-twin-66f57e",
+    "pre_verifier": "/tmp/agent-hands/runs/twin-evals/20260913T103153Z-meridian_member_record-541b0a",
+    "executor": "/tmp/agent-hands/runs/twin-evals/20260913T103154Z-meridian_place_hold-67f5f2",
+    "post_verifier": "/tmp/agent-hands/runs/twin-evals/20260913T103159Z-meridian_member_record-b11e6a"
+  },
+  "trace_sha256": {
+    "twin": "75c200d2903611605e4b8986aff796cf05e4732e96ff0a767c84d11d98a819fc",
+    "pre_verifier": "7fcfdd0e945624c91eec85e37ad46d5ce741525d0c5b6a62358daf0a220a9598",
+    "executor": "e8524bf5863639a2f57043db91b66c71ab15b69cc68495ca4c517fa60e8cb2d1",
+    "post_verifier": "1cf7b27636a8ed9f65b3645b30287f77e42c27126690ee4aec303d9ef0a67d79"
+  },
+  "trace_chain_intact": {
+    "twin": true,
+    "pre_verifier": true,
+    "executor": true,
+    "post_verifier": true
+  },
+  "durations_s": {
+    "pre_image": 1.153,
+    "executor": 5.244,
+    "post_image": 1.157
+  }
+}

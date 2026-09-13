@@ -1,0 +1,42 @@
+# frame: http://127.0.0.1:60475/members/100234/hold/post
+- table:
+  - rowgroup:
+    - row "MERIDIAN CORE Member Services Platform v4.2.1 (local fixture)":
+      - cell "MERIDIAN CORE Member Services Platform v4.2.1 (local fixture)"
+    - row "Main Menu · Member Inquiry · System Settings · Sign Off":
+      - cell "Main Menu · Member Inquiry · System Settings · Sign Off":
+        - link "Main Menu":
+          - /url: /menu
+        - text: ·
+        - link "Member Inquiry":
+          - /url: /members
+        - text: ·
+        - link "System Settings":
+          - /url: /settings
+        - text: ·
+        - link "Sign Off":
+          - /url: /signoff
+    - 'row "ACCOUNT HOLD APPLIED HOLD RECORDED Confirmation: CN480031 Share: ••••••-S0070 is now HOLD Applied: 09/13/2026 10:35:03 Return to Member Record · Main Menu"':
+      - 'cell "ACCOUNT HOLD APPLIED HOLD RECORDED Confirmation: CN480031 Share: ••••••-S0070 is now HOLD Applied: 09/13/2026 10:35:03 Return to Member Record · Main Menu"':
+        - heading "ACCOUNT HOLD APPLIED" [level=1]
+        - text: HOLD RECORDED
+        - table:
+          - rowgroup:
+            - 'row "Confirmation: CN480031"':
+              - cell "Confirmation:"
+              - cell "CN480031"
+            - 'row "Share: ••••••-S0070 is now HOLD"':
+              - cell "Share:"
+              - cell "••••••-S0070 is now HOLD"
+            - 'row "Applied: 09/13/2026 10:35:03"':
+              - cell "Applied:"
+              - cell "09/13/2026 10:35:03"
+        - link "Return to Member Record":
+          - /url: /members/••••••
+        - text: ·
+        - link "Main Menu":
+          - /url: /menu
+    - row "OPR SUPER1 | BR MAIN-001 | SID D41909E9":
+      - cell "OPR SUPER1 | BR MAIN-001 | SID D41909E9"
+    - row "F3=Sign Off F5=Main Menu F7=Member Inquiry F12=Cancel":
+      - cell "F3=Sign Off F5=Main Menu F7=Member Inquiry F12=Cancel"

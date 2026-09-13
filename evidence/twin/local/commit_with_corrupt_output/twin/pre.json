@@ -1,0 +1,54 @@
+{
+  "ok": true,
+  "observation": {
+    "kind": "share_statuses",
+    "member_number": "100234",
+    "shares": [
+      {
+        "share_id": "100234-S0001",
+        "type": "Regular Shares",
+        "status": "OPEN",
+        "status_raw": "OPEN"
+      },
+      {
+        "share_id": "100234-S0070",
+        "type": "Share Draft (Checking)",
+        "status": "OPEN",
+        "status_raw": "OPEN"
+      }
+    ],
+    "observed_at": "2026-09-13T10:36:19.223+00:00",
+    "page_url": "http://127.0.0.1:60475/members/100234"
+  },
+  "result_kind": "success",
+  "result": {
+    "result": "success",
+    "outputs": {},
+    "observation": {
+      "kind": "share_statuses",
+      "member_number": "100234",
+      "shares": [
+        {
+          "share_id": "100234-S0001",
+          "type": "Regular Shares",
+          "status": "OPEN",
+          "status_raw": "OPEN"
+        },
+        {
+          "share_id": "100234-S0070",
+          "type": "Share Draft (Checking)",
+          "status": "OPEN",
+          "status_raw": "OPEN"
+        }
+      ],
+      "observed_at": "2026-09-13T10:36:19.223+00:00",
+      "page_url": "http://127.0.0.1:60475/members/100234"
+    }
+  },
+  "run_dir": "/tmp/agent-hands/runs/twin-evals/20260913T103618Z-meridian_member_record-b64d76",
+  "artifact_sha256": "5a2ef36bc249093e4774999b55a35b255200c1706ef1a3979ed5afaf6943e2a6",
+  "read_only_violations": [],
+  "error": null,
+  "elapsed_s": 1.0116305929986993,
+  "operator_id": "teller1"
+}

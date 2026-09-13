@@ -1,0 +1,17 @@
+{
+  "result_kind": "failure",
+  "result": {
+    "result": "failure",
+    "report": {
+      "step_id": "s3",
+      "intent": "Click Sign On",
+      "expected": "a visible heading named 'MAIN MENU'",
+      "observed": "postconditions still unmet at http://127.0.0.1:60475/signon",
+      "screenshot_path": "/tmp/agent-hands/runs/twin-evals/20260913T103810Z-meridian_place_hold-182f92/failure.png",
+      "snapshot_path": "/tmp/agent-hands/runs/twin-evals/20260913T103810Z-meridian_place_hold-182f92/failure-a11y.txt"
+    }
+  },
+  "run_dir": "/tmp/agent-hands/runs/twin-evals/20260913T103810Z-meridian_place_hold-182f92",
+  "artifact_sha256": "1348d761e12214de0ff44f2c0808a1fef170832510d6fe0ac5e8a8f5167ca758",
+  "elapsed_s": 4.659614123997017
+}

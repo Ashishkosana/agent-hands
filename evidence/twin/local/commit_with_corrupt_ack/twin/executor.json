@@ -1,0 +1,20 @@
+{
+  "result_kind": "unresolved",
+  "result": {
+    "result": "unresolved",
+    "step_id": "s13",
+    "intent": "Apply the hold",
+    "dispatched": true,
+    "report": {
+      "step_id": null,
+      "intent": "verify checkpoint",
+      "expected": "region 'identity' showing the 'member_number' value",
+      "observed": "checkpoint unmet at http://127.0.0.1:60475/members/100234/hold/post",
+      "screenshot_path": "/tmp/agent-hands/runs/twin-evals/20260913T103502Z-meridian_place_hold-0f55ee/failure.png",
+      "snapshot_path": "/tmp/agent-hands/runs/twin-evals/20260913T103502Z-meridian_place_hold-0f55ee/failure-a11y.txt"
+    }
+  },
+  "run_dir": "/tmp/agent-hands/runs/twin-evals/20260913T103502Z-meridian_place_hold-0f55ee",
+  "artifact_sha256": "1348d761e12214de0ff44f2c0808a1fef170832510d6fe0ac5e8a8f5167ca758",
+  "elapsed_s": 5.355163177002396
+}

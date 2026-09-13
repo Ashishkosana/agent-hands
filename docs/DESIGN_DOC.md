@@ -59,7 +59,8 @@ Five invariants the whole design serves:
 - One concrete surface: **web, via Playwright**, against a self-authored legacy
   fixture ("Fairview Teller Console").
 - Discovery (LLM observe→decide→act loop) producing a capability artifact.
-- Deterministic replay + a five-way result/error taxonomy.
+- Deterministic replay + a five-way result/error taxonomy (six-way since the
+  verifier-twin branch added `UNRESOLVED`; see `docs/VERIFIER_TWINS.md`).
 - Human-in-the-loop escalation & handoff on the **replay** side.
 - Safety: network-layer allowlist, mutating-by-default risk gate with hash-bound
   sign-off, secret/PII redaction.

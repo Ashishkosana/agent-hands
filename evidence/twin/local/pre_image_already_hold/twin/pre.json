@@ -1,0 +1,42 @@
+{
+  "ok": true,
+  "observation": {
+    "kind": "share_statuses",
+    "member_number": "103001",
+    "shares": [
+      {
+        "share_id": "103001-S0001",
+        "type": "Regular Shares",
+        "status": "HOLD",
+        "status_raw": "HOLD [HOLD]"
+      }
+    ],
+    "observed_at": "2026-09-13T10:34:59.968+00:00",
+    "page_url": "http://127.0.0.1:60475/members/103001"
+  },
+  "result_kind": "success",
+  "result": {
+    "result": "success",
+    "outputs": {},
+    "observation": {
+      "kind": "share_statuses",
+      "member_number": "103001",
+      "shares": [
+        {
+          "share_id": "103001-S0001",
+          "type": "Regular Shares",
+          "status": "HOLD",
+          "status_raw": "HOLD [HOLD]"
+        }
+      ],
+      "observed_at": "2026-09-13T10:34:59.968+00:00",
+      "page_url": "http://127.0.0.1:60475/members/103001"
+    }
+  },
+  "run_dir": "/tmp/agent-hands/runs/twin-evals/20260913T103459Z-meridian_member_record-38e2c2",
+  "artifact_sha256": "5a2ef36bc249093e4774999b55a35b255200c1706ef1a3979ed5afaf6943e2a6",
+  "read_only_violations": [],
+  "error": null,
+  "elapsed_s": 0.952793467000447,
+  "operator_id": "teller1"
+}

@@ -1,0 +1,54 @@
+{
+  "ok": true,
+  "observation": {
+    "kind": "share_statuses",
+    "member_number": "101555",
+    "shares": [
+      {
+        "share_id": "101555-S0001",
+        "type": "Regular Shares",
+        "status": "OPEN",
+        "status_raw": "OPEN"
+      },
+      {
+        "share_id": "101555-CERT",
+        "type": "Certificate",
+        "status": "OPEN",
+        "status_raw": "OPEN"
+      }
+    ],
+    "observed_at": "2026-09-12T22:33:10.119+00:00",
+    "page_url": "https://web-sample.interface-hiring.com/members/101555"
+  },
+  "result_kind": "success",
+  "result": {
+    "result": "success",
+    "outputs": {},
+    "observation": {
+      "kind": "share_statuses",
+      "member_number": "101555",
+      "shares": [
+        {
+          "share_id": "101555-S0001",
+          "type": "Regular Shares",
+          "status": "OPEN",
+          "status_raw": "OPEN"
+        },
+        {
+          "share_id": "101555-CERT",
+          "type": "Certificate",
+          "status": "OPEN",
+          "status_raw": "OPEN"
+        }
+      ],
+      "observed_at": "2026-09-12T22:33:10.119+00:00",
+      "page_url": "https://web-sample.interface-hiring.com/members/101555"
+    }
+  },
+  "run_dir": "/tmp/agent-hands/runs/twin-live/20260912T223308Z-meridian_member_record-5ed5f3",
+  "artifact_sha256": "12b033b0572ad37c0b6df8549d1f7091145cf88e8afe26eda2d462d6ba29867e",
+  "read_only_violations": [],
+  "error": null,
+  "elapsed_s": 1.4951819329999125,
+  "operator_id": "teller1"
+}

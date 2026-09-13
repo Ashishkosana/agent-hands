@@ -1,0 +1,15 @@
+{
+  "verdict": "VERIFIED_COMMITTED",
+  "reason": "durable state observed OPEN -> HOLD within the observation window; executor was unresolved. Window attribution only: this does not establish that this run caused the change",
+  "retry_eligible": false,
+  "executor_claim": null,
+  "executor_kind": "unresolved",
+  "target_pre": "OPEN",
+  "target_post": "HOLD",
+  "collateral_changes": [],
+  "inputs_sha256": "c4d506f6eba99eafcaa00f4417851f03ec7988cbd82f1a6dae999698f9910fe8",
+  "attribution": "window",
+  "pre_observed_at": "2026-09-13T10:30:38.653+00:00",
+  "post_observed_at": "2026-09-13T10:30:45.097+00:00",
+  "observation_window_ms": 6444
+}

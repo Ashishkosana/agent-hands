@@ -177,6 +177,11 @@ class WebSurface:
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
         self._page: Page | None = None
+        # Initialized here, not in start(): the engine's failure path reads
+        # both even when the browser never came up, and an AttributeError
+        # while handling an infrastructure error is the worst way to learn it.
+        self.blocked_requests: list[str] = []
+        self.dispatched: list[DispatchedRequest] = []
 
     # ------------------------------------------------------------- lifecycle
 
@@ -222,12 +227,12 @@ class WebSurface:
         self._browser = self._playwright.chromium.launch(headless=not self._headed)
         self._page = self._browser.new_page()
         context = self._page.context
-        self.blocked_requests: list[str] = []
+        self.blocked_requests = []
         # Every non-GET request the context dispatches, in order. The engine
         # uses the "mutation"-kind entries to tell "a consequential request
         # left the browser and its answer never came back" (UNRESOLVED) from
         # "nothing was ever sent" (FAILURE). Sign-on POSTs are "session".
-        self.dispatched: list[DispatchedRequest] = []
+        self.dispatched = []
         session_paths = tuple(session_establishment_paths)
 
         def record_dispatch(request: PwRequest) -> None:
@@ -270,13 +275,27 @@ class WebSurface:
         self._page.goto(entry_url)
 
     def stop(self) -> None:
-        if self._browser is not None:
-            self._browser.close()
-        if self._playwright is not None:
-            self._playwright.stop()
+        """Tear the session down. Tolerant by design: stop() runs in the
+        engine's ``finally`` after any failure, including a browser that
+        crashed or never launched, and must not replace a typed result with a
+        teardown exception."""
+        try:
+            if self._browser is not None:
+                self._browser.close()
+        except PlaywrightError:
+            pass
+        try:
+            if self._playwright is not None:
+                self._playwright.stop()
+        except PlaywrightError:
+            pass
         self._browser = None
         self._playwright = None
         self._page = None
+
+    @property
+    def started(self) -> bool:
+        return self._page is not None
 
     @property
     def page(self) -> Page:
@@ -479,6 +498,8 @@ class WebSurface:
         capture must never turn a reportable failure into a crash."""
         screenshot_path: str | None = None
         snapshot_path: str | None = None
+        if not self.started:
+            return None, None  # nothing to capture from a browser that never came up
         try:
             path = run_dir / "failure.png"
             self.page.screenshot(path=str(path), full_page=True)

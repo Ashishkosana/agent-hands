@@ -24,7 +24,7 @@ from typing import Any
 from flask import Flask, abort, render_template_string, send_from_directory
 
 from hands.artifact import dump_capability, load_capability, risk_review_valid
-from hands.trace import is_chained, verify_chain
+from hands.trace import is_chained, is_sealed, verify_chain
 
 # Plain-word badges: every status a non-engineer understands on sight.
 # (label, text color, soft background) — the light-fintech badge idiom.
@@ -169,11 +169,19 @@ def _summarize_run(run_dir: Path) -> dict[str, Any] | None:
         1 for e in events if any(m in str(e.get("event", "")) for m in _MODEL_MARKERS)
     )
 
-    # Tamper evidence, recomputed from the same hash chain `hands explain` uses.
-    if is_chained(run_dir):
-        log_state = "intact" if verify_chain(run_dir) else "broken"
-    else:
+    # Tamper evidence, recomputed from the same hash chain `hands explain`
+    # uses. Three live states, never a binary: "broken" (chain or seal fails),
+    # "sealed" (chain + seal verify), "unsealed" (chain verifies but no seal
+    # pins the final record — a deleted seal looks exactly like this, so it is
+    # not rendered as intact).
+    if not is_chained(run_dir):
         log_state = "legacy"
+    elif not verify_chain(run_dir):
+        log_state = "broken"
+    elif is_sealed(run_dir):
+        log_state = "sealed"
+    else:
+        log_state = "unsealed"
 
     evidence = [
         p.name
@@ -369,7 +377,8 @@ _TRUST_CHIPS = """
     {% elif r.drift == 'drifted' %}
       <span class="chip warn">Recipe changed since — approval unknown for this version ⚠</span>
     {% endif %}
-    {% if r.log_state == 'intact' %}<span class="chip ok">Log tamper-evident ✓</span>
+    {% if r.log_state == 'sealed' %}<span class="chip ok">Log sealed &amp; tamper-evident ✓</span>
+    {% elif r.log_state == 'unsealed' %}<span class="chip warn">Log UNSEALED — final record unpinned</span>
     {% elif r.log_state == 'broken' %}<span class="chip risk">Log MODIFIED ⚠</span>{% endif %}
   {% else %}
     <span class="chip warn">AI used here (learning run)</span>

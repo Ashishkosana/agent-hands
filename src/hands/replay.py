@@ -198,6 +198,11 @@ class ReplayEngine:
         # Count of dispatched (non-GET) requests when the current step began;
         # "did this step's action leave the browser" is measured against it.
         self._dispatch_mark = 0
+        # Count of blocked (off-allowlist) requests when the current step or
+        # checkpoint began. A failure is blamed on the allowlist only for
+        # traffic blocked SINCE this mark: a harmless font or pixel blocked at
+        # step 1 must not relabel an unrelated locator failure at step 9.
+        self._blocked_mark = 0
         # The run's consequential-action hazard (see _Hazard); None until a
         # risky step is observed dispatching a business mutation.
         self._hazard: _Hazard | None = None
@@ -211,6 +216,7 @@ class ReplayEngine:
         self.last_run_dir = None
         self._hazard = None
         self._dispatch_mark = 0
+        self._blocked_mark = 0
 
     def run(
         self,
@@ -288,6 +294,11 @@ class ReplayEngine:
                 # said no (or said something specific); nothing is ambiguous.
                 result = hit.outcome
             except _StepFailed as failed:
+                # Whatever the verdict, blocked traffic goes on the record
+                # first: attribution below decides what it CAUSED, never
+                # whether it is reported.
+                if surface.blocked_requests:
+                    trace.emit("policy_blocked_requests", urls=surface.blocked_requests[:10])
                 hazard = self._hazard
                 if failed.unresolved or hazard is not None:
                     # A consequential mutation left the browser at some point
@@ -316,19 +327,11 @@ class ReplayEngine:
                     )
                     trace.emit("run_finished", result=masked_result(capability, result))
                     return result
-                if surface.blocked_requests:
-                    result = PolicyViolation(
-                        rule="off_allowlist_traffic",
-                        detail=f"blocked {len(surface.blocked_requests)} request(s) outside "
-                        f"the allowlist, e.g. {surface.blocked_requests[0]}; the flow could "
-                        f"not proceed",
-                    )
-                    trace.emit("run_finished", result=masked_result(capability, result))
-                    return result
-                # Page-content evidence is suppressed once a human has driven
-                # the session: what they entered may still sit in page state,
-                # and a screenshot/snapshot would persist it. (Element-level
-                # taint masking would refine suppression to masking.)
+                # No hazard: capture evidence, then attribute. Page-content
+                # evidence is suppressed once a human has driven the session:
+                # what they entered may still sit in page state, and a
+                # screenshot/snapshot would persist it. (Element-level taint
+                # masking would refine suppression to masking.)
                 if hub is not None and (
                     hub.state is ControlState.HUMAN or hub.human_actions
                 ):
@@ -337,9 +340,73 @@ class ReplayEngine:
                     shot, snap = surface.capture_evidence(run_dir)
                     failed.report.screenshot_path = shot
                     failed.report.snapshot_path = snap
-                result = Failure(report=failed.report)
+                # Blame the allowlist only for traffic blocked DURING the step
+                # (or checkpoint) that failed. Earlier blocks are on the trace
+                # (policy_blocked_requests, above); they did not cause this
+                # failure and must not rename it.
+                blocked_here = surface.blocked_requests[self._blocked_mark :]
+                if blocked_here:
+                    result = PolicyViolation(
+                        rule="off_allowlist_traffic",
+                        detail=f"blocked {len(blocked_here)} request(s) outside the allowlist "
+                        f"while this step ran, e.g. {blocked_here[0]}; the flow could "
+                        f"not proceed",
+                    )
+                else:
+                    result = Failure(report=failed.report)
+            except (SurfaceError, PlaywrightError) as exc:
+                # Infrastructure, not flow: the browser never came up, the
+                # entry navigation failed, or a surface error escaped the step
+                # loop. Report it INSIDE the six-way contract instead of
+                # raising out of run() and handing the caller an untyped 500.
+                # The V1 hazard rule comes first and is not negotiable: if a
+                # consequential mutation already left the browser, a dying
+                # browser is exactly the uncertainty UNRESOLVED exists for.
+                hazard = self._hazard
+                if surface.blocked_requests:
+                    trace.emit("policy_blocked_requests", urls=surface.blocked_requests[:10])
+                shot, snap = surface.capture_evidence(run_dir)
+                report = FailureReport(
+                    step_id=None,
+                    intent="drive the browser session",
+                    expected=f"a usable browser session at {entry_url}",
+                    observed=f"{type(exc).__name__}: {exc}",
+                    screenshot_path=shot,
+                    snapshot_path=snap,
+                )
+                if hazard is not None:
+                    result = Unresolved(
+                        step_id=hazard.step_id,
+                        intent=hazard.intent,
+                        dispatched=True,
+                        report=report,
+                    )
+                    trace.emit(
+                        "unresolved",
+                        step=hazard.step_id,
+                        dispatched=True,
+                        failed_at=report.intent,
+                        observed=report.observed,
+                        hazard_requests=list(hazard.requests),
+                    )
+                elif surface.blocked_requests[self._blocked_mark :]:
+                    # The allowlist killed it — most likely the entry
+                    # navigation itself. Say so: "blocked by policy" is the
+                    # reason this must not look like a mysterious timeout.
+                    blocked_here = surface.blocked_requests[self._blocked_mark :]
+                    result = PolicyViolation(
+                        rule="off_allowlist_traffic",
+                        detail=f"blocked {len(blocked_here)} request(s) outside the allowlist, "
+                        f"e.g. {blocked_here[0]}; the session could not be established",
+                    )
+                else:
+                    trace.emit("surface_unavailable", error=report.observed)
+                    result = Failure(report=report)
             finally:
-                surface.stop()
+                try:
+                    surface.stop()
+                except (SurfaceError, PlaywrightError) as exc:
+                    trace.emit("surface_stop_failed", error=str(exc))
                 if console is not None:
                     console.stop()
                 self._hub = None
@@ -482,6 +549,7 @@ class ReplayEngine:
             trace.emit("recognizers_suppressed_stale", step=step.id, ids=sorted(suppressed))
 
         self._dispatch_mark = len(surface.dispatched)
+        self._blocked_mark = len(surface.blocked_requests)  # this step owns its own traffic
         try:
             resolved = self._act_with_retries(
                 capability, params, surface, trace, step, armed, suppressed, deadline
@@ -1109,6 +1177,7 @@ class ReplayEngine:
     ) -> None:
         deadline = time.monotonic() + self.config.step_budget_s
         armed = list(capability.conditions)
+        self._blocked_mark = len(surface.blocked_requests)  # checkpoint owns its own traffic
         while True:
             pending = [
                 c

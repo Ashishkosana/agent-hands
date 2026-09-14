@@ -52,7 +52,7 @@ python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/playwright install chromium
 
-.venv/bin/pytest                      # 85 tests, offline, ~50s (spins the fixture)
+.venv/bin/pytest                      # full suite, offline, a few minutes (spins the fixtures)
 .venv/bin/ruff check .                 # lint (config in pyproject)
 .venv/bin/mypy                         # strict; must stay clean
 .venv/bin/python evals/run_evals.py    # regenerates evals/results.md, offline

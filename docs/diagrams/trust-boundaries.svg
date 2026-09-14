@@ -57,7 +57,7 @@
   <rect x="30" y="670" width="1140" height="90" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
   <text x="50" y="694" font-weight="700" font-size="15" fill="#14532d">Evidence bundle (written by the orchestrator, read by anyone)</text>
   <text x="50" y="714" fill="#1f2937">expected.json &#183; pre.json &#183; executor.json &#183; post.json &#183; reconciliation.json &#183; manifest.json (artifact hashes, SHA-256 of every trace, verify_chain results) &#183; hash-chained trace.jsonl</text>
-  <text x="50" y="734" fill="#374151">Stated bound: the chain is keyless &#8212; tamper-evident, not non-repudiable; truncating the tail is undetectable without an external anchor.</text>
+  <text x="50" y="734" fill="#374151">Stated bound: the chain is keyless &#8212; tamper-evident, not non-repudiable; the tail seal (trace.tip) sits beside the log, so a receipt kept elsewhere is the real control.</text>
   <text x="50" y="752" fill="#374151">Not provided: credential independence &#8212; the demo's operators share one password and one privilege model the project does not control.</text>
 
   <!-- Arrows: sessions to legacy app -->

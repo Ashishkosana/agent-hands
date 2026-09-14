@@ -78,9 +78,12 @@ the run failed safe — an unanswered intervention never acts alone.
 
 **API boundary guardrails:** an `idempotency_key` suppresses duplicate execution
 of a sequential retry (the retried transfer returns the original envelope —
-tested). This is an in-memory demo guard, not a guarantee: it is not persistent
-across processes and its check-then-execute has a time-of-check/time-of-use gap
-under concurrency, both recorded in the V1 backlog; it does not deliver
+tested). The check, the run and the completed-record write are one critical
+section, so two concurrent requests with the same key execute once and the
+second receives the replayed envelope (post-V1 hardening, tested). This is
+still an in-memory demo guard, not a guarantee: the key is not bound to the
+request payload and the completed map does not survive a restart, both
+recorded in the backlog (`docs/VERIFIER_TWINS.md`, F9); it does not deliver
 exactly-once execution against the live system. A currency sanitizer normalizes unambiguous currency shapes ("$1,000.50" → 1000.50)
 for non-sensitive params only (tested, incl. that passwords are never rewritten).
 
@@ -119,8 +122,10 @@ The API/chatbot/dashboard sit **above** the engine, never around it: replay stil
 enforces the network allowlist, mutating-by-default risk + hash-bound signed
 review, secret masking, and the escalation state machine. Two audit-hardening
 controls sit on top: the trace is a **tamper-evident hash chain** (any naive
-edit/removal/reorder of a record is detected by recomputation; keyless-rewrite
-and tail-truncation limits are documented, with external anchoring as the
+edit/removal/reorder of a record is detected by recomputation; closing a run
+seals the tail into `trace.tip`, and the tip travels out of the run directory
+as `audit_chain_tip` in the invoke envelope; the keyless-rewrite limit is
+documented, with a receipt store the caller does not control as the
 production next step), and risk sign-off is **maker-checker** — discovery
 stamps the recording operator from `HANDS_OPERATOR`, that identity and the
 checker's are both bound into the signed hash, and the author of a risky flow
@@ -133,7 +138,8 @@ only on artifacts that discovery recorded. The dashboard imports only model-free
 modules (`hands.artifact`, `hands.trace`; read-only, import-purity verified)
 and reads the already-masked traces. `hands explain <run_id>` reconstructs any
 run into an examiner-grade **audit receipt**: capability + version + contract
-hash, maker/checker identities, the chain verdict (intact / BROKEN), the full
+hash, maker/checker identities, the chain verdict (SEALED / UNSEALED / BROKEN,
+or RECONCILED against a receipt supplied with `--expect-tip`), the full
 decision trace, the count of model events (0 → provably no model in the loop),
 the typed result, and evidence.
 

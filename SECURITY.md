@@ -15,8 +15,13 @@ holds, account changes) on whatever system it is pointed at.
 - The capability API (`hands.api`) binds to localhost and has no
   authentication of its own. It is a demo surface, not a service boundary.
 - The audit trace is a keyless hash chain: tamper-evident, not
-  non-repudiable, and tail truncation is undetectable without an external
-  anchor. Treat it accordingly.
+  non-repudiable. The tail is sealed into `trace.tip` beside the log, and the
+  tip is returned as `audit_chain_tip` in the API envelope; only a receipt
+  kept outside the run directory detects a rewrite of both files, and the
+  repository does not store such receipts. Treat it accordingly.
+- The API idempotency key is an in-memory demo guard: the concurrent
+  same-key race is closed, but the key is not bound to the request payload
+  and does not survive a restart.
 
 ## Reporting a vulnerability
 

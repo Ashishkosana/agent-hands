@@ -30,6 +30,14 @@ verdict does and does not mean; for a committed verdict it reads, in part,
 change". `inputs_sha256` lets the verdict be recomputed from the four inputs
 with `hands.reconcile`.
 
+Every trace in these bundles predates trace sealing (`trace.tip`, added in
+the post-V1 hardening): they verify on the hash chain alone and report
+`is_sealed(...) == False`, so `hands explain` and the dashboard render them
+as UNSEALED rather than intact. The manifests hash `trace.jsonl` itself, which
+the later seal file does not alter. (The older core-loop records under
+`evidence/replay-run*/` and `evidence/escalation-run/` predate hash-chaining
+altogether and render as "legacy trace".)
+
 Some `executor/failure.png` files are blank white pages: the executor's
 acknowledgement was aborted at the network layer by the fault injector, so
 there was nothing to render when the failure capture ran. They are kept

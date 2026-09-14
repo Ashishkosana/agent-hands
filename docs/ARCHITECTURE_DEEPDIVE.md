@@ -276,15 +276,21 @@ property, not a probabilistic one.
 The dashboard's run detail is the operator's post-hoc view: per-step timing
 benchmarks derived from trace timestamps, the screenshot and accessibility/DOM
 snapshot, the full decision trace with `seq`/`prev` hash-chain fields, and the
-trust chips (`No AI used ✓`, `Approved by … ✓`, `Recipe unchanged ✓`,
-`Log tamper-evident ✓`).
+trust chips (`No AI used ✓`, `Approved by … ✓`, `Recipe unchanged ✓`, and a
+three-state log chip: `Log sealed & tamper-evident ✓`, `Log UNSEALED — final
+record unpinned`, or broken).
 
 One deliberate asymmetry: once a human has driven the session, **page-content
-evidence is suppressed** (`replay.py:225` — `evidence_suppressed_human_window`)
-rather than captured. A canary test types a sentinel during handoff and asserts
-it appears nowhere under `runs/`; the first implementation **leaked** — the
-failure-path accessibility snapshot still contained the human's typed text.
-Suppression is the fix; element-level taint masking is the stated refinement.
+evidence is suppressed** (`ReplayEngine._failure_evidence` —
+`evidence_suppressed_human_window`) rather than captured. A canary test types
+a sentinel during handoff and asserts it appears nowhere under `runs/`; the
+first implementation **leaked** — the failure-path accessibility snapshot
+still contained the human's typed text. Suppression is the fix; post-V1
+hardening routed every terminal failure path (`Failure`, `UNRESOLVED`,
+infrastructure error) through the one decision so they cannot drift apart.
+Known residual: the intervention screenshot a *later* escalation captures in
+`_maybe_escalate`, after a prior human window in the same run, is not yet
+suppressed. Element-level taint masking is the stated refinement.
 Being able to say *"my own canary caught a real leak"* is worth more than
 claiming the redaction was right first time.
 
@@ -341,6 +347,8 @@ HTTP request
    │      · HANDS_APP scopes the catalog to one institution (tenant boundary)
    │
    ├─2. IDEMPOTENCY GATE        body.idempotency_key | Idempotency-Key header
+   │      · evaluated INSIDE _INVOKE_LOCK, in the same critical section as
+   │        the run and the completed-record write (no check-then-act race)
    │      · hit  → return the ORIGINAL envelope + {"idempotent_replay": true}
    │               and DO NOT execute
    │      · miss → continue
@@ -383,9 +391,13 @@ eligible to run unattended.
 
 **Idempotency, stated with its limits.** The store is an in-process dict keyed
 `(capability, idempotency_key)`, so it is per-worker and per-process — correct
-for a single-worker deployment and tested (a repeated key executes **exactly
-once** and returns the original envelope). Production requires a shared store
-and a TTL; that is a substitution behind the same key, not a redesign. It also
+for a single-worker deployment and tested (a repeated key, sequential or
+concurrent, executes once within that process and returns the original
+envelope; the check → run → record sequence is one critical section). Two
+gaps stay open and documented: the key is not bound to the request payload,
+and the map does not survive a restart. Production requires a payload hash in
+the record, a shared durable store and a TTL; that is a substitution behind
+the same key, not a redesign. It also
 composes with, rather than replaces, the engine-level no-double-fire rule:
 idempotency stops a **duplicate call**, `_effect_already_present` stops a
 **duplicate action inside one call**.
@@ -609,13 +621,21 @@ identity bound in — it answers "is this approval still valid for this content"
 Conflating them in a review would be a real error: the first is attribution, the
 second is authorization.
 
-**"Tamper-evident", not tamper-proof.** The chain is keyless
-(`trace.py:5–16`): an adversary who can rewrite the whole file can recompute
-every `prev` and forge an intact-looking log, and tail truncation is
-undetectable without an external anchor. It defeats naive edits, deletions and
-reordering — which is what it claims. Mitigation: anchor the final record's hash
-outside the run directory (it already travels in the invoke envelope and the
-receipt) or key the chain with an HMAC.
+**"Tamper-evident", not tamper-proof.** The chain defeats naive edits,
+deletions and reordering — which is what it claims. A chain cannot pin its own
+final record, so `Trace.close()` seals the record count and tip hash into
+`trace.tip`, which `verify_chain` cross-checks; `is_sealed` exposes seal
+presence as a reported state so an absent seal renders as UNSEALED rather than
+intact, and `chain_tip` carries the tip out of the directory as the envelope's
+`audit_chain_tip` for `verify_chain(dir, expected_tip=…)` / `hands explain
+--expect-tip`. The chain is still keyless (`trace.py`, module docstring): an
+adversary who can rewrite both files can recompute a consistent pair and forge
+a log that looks intact to anyone who kept no anchor. The external receipt is
+the actual control; the seal file is a convenience. Two distinctions the CLI
+keeps: a matching receipt does not make an unsealed directory sealed, and a
+receipt that fails to match an intact log is reported as a receipt mismatch,
+not as local corruption. Closing the remaining gap needs an HMAC-keyed chain
+or a receipt store the caller does not control.
 
 ## Appendix B — the three claims to defend, and the evidence for each
 

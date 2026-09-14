@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "hands"
 version = "0.1.0"
-description = "Record-once / replay-many computer-use automation: an LLM discovers a UI flow once; a typed capability artifact replays it deterministically with no model in the loop."
+description = "Computer-use infrastructure for legacy financial software: AI discovers workflows, compiles them into typed capabilities, and production executes them deterministically with explicit safety, evidence and failure semantics."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.12"

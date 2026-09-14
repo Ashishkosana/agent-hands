@@ -6,7 +6,11 @@ the file.
 
 ## What this is
 
-Record-once / replay-many computer-use automation for legacy UIs with no API.
+Agent Hands: computer-use infrastructure for legacy financial software. AI
+discovers workflows, compiles them into typed capabilities, and production
+executes those capabilities deterministically with explicit safety, evidence
+and failure semantics. The project is Ashish Kosana's; MERIDIAN CORE
+(`web-sample.interface-hiring.com`) is a supplied external target, not ours.
 An LLM works out a task inside a real UI **once** (*discovery*); that run is
 distilled into a typed, versioned **capability artifact** (JSON); production
 invocations **replay** the artifact deterministically — **no model in the
@@ -127,7 +131,11 @@ records and measured results (`evals/twin_results.md` keeps local and live
 twin numbers in separate sections — never sum them). `docs/DESIGN.md` = full design incl.
 considered-and-rejected; `docs/HARD_QUESTIONS.md` = the hardest questions +
 honest answers; `docs/history/REPORT.md` = archived as-built summary (Aug 2026);
-`docs/README.md` = documentation index.
+`docs/README.md` = documentation index. Public-facing wording rules: never
+describe a V1 verdict as causal (it is `attribution="window"`); never claim
+exactly-once, live duplicate prevention, or novelty; label MERIDIAN as
+supplied; keep local and live numbers apart; do not hardcode the test count in
+the README (CI is the source of truth).
 
 ## Mental models where the subtlety lives
 

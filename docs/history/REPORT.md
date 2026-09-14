@@ -1,4 +1,10 @@
-# Report
+# As-built report (August 2026 snapshot)
+
+> **Archived.** This is the as-built summary written for the August 2026
+> build (tag `buildathon-submission`, before the V1 outcome-verification
+> work). It is kept for the record and is not updated. Current documentation:
+> [`README.md`](../../README.md), [`docs/DESIGN.md`](../DESIGN.md),
+> [`docs/ADAPTATION.md`](../ADAPTATION.md), [`docs/VERIFIER_TWINS.md`](../VERIFIER_TWINS.md).
 
 ## Architecture
 

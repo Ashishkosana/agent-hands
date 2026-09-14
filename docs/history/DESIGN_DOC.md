@@ -2,11 +2,13 @@
 
 **Author:** Ashish Kosana
 **Date:** 2026-08-19
-**Status:** Draft
-**Reviewers:** interface.ai build-session panel (CTO, Head of Product, engineers who reviewed the take-home)
+**Status:** Archived (historical design document)
 
-> Living document. High-level sections are complete; the per-module deep-dives
-> under **Proposed Design** grow as we walk each file (requirement → why → gap).
+> **Archived.** This formal design document was written in August 2026 for an
+> external technical review of the initial build and is kept unchanged for the
+> record. Requirement numbers (§2.x, §3.x) refer to that review's brief. The
+> maintained design is [`docs/DESIGN.md`](../DESIGN.md); the current state of
+> the project is in the [`README`](../../README.md).
 
 ---
 
@@ -113,7 +115,7 @@ The "users" are a **calling AI agent** and a **human operator/reviewer**:
 - **3.6 Escalation & handoff** — detect stuck, route intervention with context,
   take over the live session, resume. → `escalation.py`, `replay.py`.
 - **3.7 Heterogeneity & multi-tenant (design-only)** — surface seam + overlay/
-  variant/drift design. → `surface.py` seam; design in this doc + REPORT §4.
+  variant/drift design. → `surface.py` seam; design in this doc + `docs/history/REPORT.md` §Heterogeneity.
 
 ### Key Constraints
 - No clean DOM, no stable selectors, no test IDs on the target.
@@ -267,7 +269,7 @@ None outstanding. `runs/` is transient (gitignored); curated runs are copied to
 `/evidence/`.
 
 ## Tasks / Future Work
-In priority order (from REPORT §7):
+In priority order (from the as-built report, `docs/history/REPORT.md` §Cuts):
 1. Overlay loader + a structurally divergent second tenant (make §4 demonstrated).
 2. Discovery-side escalation (same hub, one integration short).
 3. Element-level taint masking (replace wholesale evidence suppression).
@@ -293,8 +295,8 @@ seam speaks `chat.completions`).
 - **Business outcome** — a legitimate non-success answer (e.g. MEMBER_NOT_FOUND).
 
 ### References
-- Assignment: "Take-Home Project: Computer-Use Automation System" (interface.ai).
-- `README.md`, `REPORT.md`, `docs/DESIGN.md`, `docs/DEFENSE.md`, `CLAUDE.md`.
+- External review brief: "Computer-Use Automation System" (interface.ai, August 2026).
+- `README.md`, `docs/history/REPORT.md`, `docs/DESIGN.md`, `docs/DEFENSE.md`, `CLAUDE.md`.
 - `evals/results.md`, `/evidence/`.
 
 ### Decisions Made

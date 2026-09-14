@@ -174,10 +174,10 @@ hands explain <run_id>        # the audit receipt
 
 ## Screenshots
 
-**Unified console — chatbot (left) + live run dashboard (right):**
-
-![console](screenshots/meridian-console.png)
-
-**Dashboard — capability catalog, run history, status, evidence, contract drift:**
-
-![dashboard](screenshots/trust-dashboard.png)
+The README carries the current screenshots, each captioned with what built it
+(`docs/screenshots/`). Captures of the console driving the live MERIDIAN CORE
+demo are not committed: they would show third-party UI without the context
+needed to tell what was supplied from what was built here, and the run
+history they showed lives in the gitignored `runs/` directory. The committed
+V1 evidence bundles under `evidence/twin/live/` are the record of the live
+runs.

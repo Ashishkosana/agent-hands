@@ -77,8 +77,11 @@ hash-chained events; with no operator answer inside the TTL the session closed a
 the run failed safe — an unanswered intervention never acts alone.
 
 **API boundary guardrails:** an `idempotency_key` suppresses duplicate execution
-(a retried transfer returns the original envelope, executed exactly once — tested);
-a currency sanitizer normalizes unambiguous currency shapes ("$1,000.50" → 1000.50)
+of a sequential retry (the retried transfer returns the original envelope —
+tested). This is an in-memory demo guard, not a guarantee: it is not persistent
+across processes and its check-then-execute has a time-of-check/time-of-use gap
+under concurrency, both recorded in the V1 backlog; it does not deliver
+exactly-once execution against the live system. A currency sanitizer normalizes unambiguous currency shapes ("$1,000.50" → 1000.50)
 for non-sensitive params only (tested, incl. that passwords are never rewritten).
 
 ## The API contract (§3.2)

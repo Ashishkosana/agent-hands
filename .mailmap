@@ -1,0 +1,3 @@
+# Consolidate the author's two commit identities for git shortlog / blame.
+# GitHub ignores this file; it changes nothing about the hosted contributor graph.
+Ashish Kosana <ashishkosana@gmail.com> <166576309+Ashishkosana@users.noreply.github.com>

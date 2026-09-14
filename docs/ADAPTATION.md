@@ -1,11 +1,19 @@
 # Adaptation write-up — agent-hands → MERIDIAN CORE
 
-The take-home built the load-bearing core: an LLM discovers a UI flow once, it is
-distilled into a typed, versioned **capability artifact**, and production
-**replays it deterministically with no model in the loop** (proven hermetically).
-This adaptation points that core at the live legacy target **MERIDIAN CORE**
-(`web-sample.interface-hiring.com`) and wraps it as an invocable API, a chatbot,
-and a dashboard.
+The initial build produced the load-bearing core: an LLM discovers a UI flow
+once, it is distilled into a typed, versioned **capability artifact**, and
+production **replays it deterministically with no model in the loop** (proven
+hermetically). This adaptation points that core at an external legacy target,
+**MERIDIAN CORE**, and wraps it as an invocable API, a chatbot, and a dashboard.
+
+> **What MERIDIAN CORE is.** A hosted demo of a legacy credit-union core
+> banking console (`web-sample.interface-hiring.com`), supplied by a third
+> party as the target system for this work. It was **not built by this
+> project** and is not part of this repository. Everything that drives it —
+> the capabilities under `capabilities/generated/meridian_*.json`, the API,
+> the dashboard, the chatbot, and `fixture/meridian.py` (a local look-alike
+> used for fault-injection evaluation) — is this project's work. The demo is
+> shared with other users and its data changes over time.
 
 ## What adapting actually took
 
@@ -69,8 +77,14 @@ hash-chained events; with no operator answer inside the TTL the session closed a
 the run failed safe — an unanswered intervention never acts alone.
 
 **API boundary guardrails:** an `idempotency_key` suppresses duplicate execution
-(a retried transfer returns the original envelope, executed exactly once — tested);
-a currency sanitizer normalizes unambiguous currency shapes ("$1,000.50" → 1000.50)
+of a sequential retry (the retried transfer returns the original envelope —
+tested). The check, the run and the completed-record write are one critical
+section, so two concurrent requests with the same key execute once and the
+second receives the replayed envelope (post-V1 hardening, tested). This is
+still an in-memory demo guard, not a guarantee: the key is not bound to the
+request payload and the completed map does not survive a restart, both
+recorded in the backlog (`docs/VERIFIER_TWINS.md`, F9); it does not deliver
+exactly-once execution against the live system. A currency sanitizer normalizes unambiguous currency shapes ("$1,000.50" → 1000.50)
 for non-sensitive params only (tested, incl. that passwords are never rewritten).
 
 ## The API contract (§3.2)
@@ -108,16 +122,24 @@ The API/chatbot/dashboard sit **above** the engine, never around it: replay stil
 enforces the network allowlist, mutating-by-default risk + hash-bound signed
 review, secret masking, and the escalation state machine. Two audit-hardening
 controls sit on top: the trace is a **tamper-evident hash chain** (any naive
-edit/removal/reorder of a record is detected by recomputation; keyless-rewrite
-and tail-truncation limits are documented, with external anchoring as the
+edit/removal/reorder of a record is detected by recomputation; closing a run
+seals the tail into `trace.tip`, and the tip travels out of the run directory
+as `audit_chain_tip` in the invoke envelope; the keyless-rewrite limit is
+documented, with a receipt store the caller does not control as the
 production next step), and risk sign-off is **maker-checker** — discovery
 stamps the recording operator from `HANDS_OPERATOR`, that identity and the
-reviewer's are both bound into the signed hash, and the author of a risky flow
-cannot approve their own steps. The dashboard imports only model-free leaf
+checker's are both bound into the signed hash, and the author of a risky flow
+cannot approve their own steps. Note the limit of the demonstration: the
+committed `meridian_*` artifacts were authored through
+`scripts/build_capabilities.py`, not recorded by a discovery run, so they carry
+no maker identity (`recorded_by: null`) and the dashboard marks them "four-eyes
+not verifiable". The control is enforced and tested; it is exercised end to end
+only on artifacts that discovery recorded. The dashboard imports only model-free leaf
 modules (`hands.artifact`, `hands.trace`; read-only, import-purity verified)
 and reads the already-masked traces. `hands explain <run_id>` reconstructs any
 run into an examiner-grade **audit receipt**: capability + version + contract
-hash, maker/checker identities, the chain verdict (intact / BROKEN), the full
+hash, maker/checker identities, the chain verdict (SEALED / UNSEALED / BROKEN,
+or RECONCILED against a receipt supplied with `--expect-tip`), the full
 decision trace, the count of model events (0 → provably no model in the loop),
 the typed result, and evidence.
 
@@ -161,10 +183,10 @@ hands explain <run_id>        # the audit receipt
 
 ## Screenshots
 
-**Unified console — chatbot (left) + live run dashboard (right):**
-
-![console](screenshots/meridian-console.png)
-
-**Dashboard — capability catalog, run history, status, evidence, contract drift:**
-
-![dashboard](screenshots/trust-dashboard.png)
+The README carries the current screenshots, each captioned with what built it
+(`docs/screenshots/`). Captures of the console driving the live MERIDIAN CORE
+demo are not committed: they would show third-party UI without the context
+needed to tell what was supplied from what was built here, and the run
+history they showed lives in the gitignored `runs/` directory. The committed
+V1 evidence bundles under `evidence/twin/live/` are the record of the live
+runs.

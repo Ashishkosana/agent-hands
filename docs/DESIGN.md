@@ -112,7 +112,7 @@ agent can invoke it blind; steps are implementation detail below that line.
 }
 ```
 
-Schema decisions an interviewer will probe, answered:
+Schema decisions that draw the hardest questions, answered:
 
 - **Outcome codes are top-level and closed.** Conditions reference them; the
   loader validates closure (every `outcome_code` declared, every declared code
@@ -397,7 +397,7 @@ Never guess — the same rule the ladder enforces.
 - **Canary test:** a scripted "human" types a sentinel string during handoff;
   the suite asserts the sentinel appears nowhere under `runs/`.
 
-## Heterogeneity & tenancy (design-only, per the brief)
+## Heterogeneity & tenancy (design-only)
 
 **What transfers to desktop (UIA/AX) cleanly:** semantic role+name targets, the
 ladder discipline, condition polling, checkpoints, typed I/O, the control-token
@@ -496,11 +496,12 @@ from web page to CLI on the same state machine; 4) the drift eval case.
   brief warns about, and re-finding targets each run puts a model back into the
   model-free path. Kept for evidence/escalation context on web; explicitly
   *not* foreclosed as a last-rung fallback for custom-drawn desktop controls.
-- **CSS/XPath as primary locators** — assumes a clean DOM the brief says
-  doesn't exist. Kept as the flagged, same-tenant-only last rung.
+- **CSS/XPath as primary locators** — assumes a clean DOM that legacy
+  table-soup markup does not have. Kept as the flagged, same-tenant-only last rung.
 - **Transcript-as-artifact** — not typed, not reviewable, not parameterizable.
 - **Agent frameworks** — the loop is a couple hundred lines; a framework adds
   a dependency to defend without adding capability.
 - **A database** — JSON files are diffable and reviewable, which is the point.
-- **Services/queues** — single process; the brief explicitly does not reward
-  scaling infrastructure.
+- **Services/queues** — single process; the problem is correctness under
+  ambiguity, not throughput, and scaling infrastructure would add surface
+  area without evidence.

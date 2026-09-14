@@ -1,7 +1,7 @@
-# Defense notes
+# Hard questions
 
-The walkthrough I'd give in an interview: for each load-bearing piece, the
-hardest questions I expect, with the honest answers. If an answer says
+For each load-bearing piece of the system, the hardest questions a careful
+engineer would ask, with the honest answers. If an answer says
 "as designed" vs "as built", that distinction is deliberate — inflating it
 would cost more than the gap.
 
@@ -20,7 +20,7 @@ echoed ID becomes a placeholder — or they're hand-authored, in which case the
 artifact marks them `authored` and unverified until an eval scenario exercises
 them, and the eval table reports the verified/unverified split. Without that,
 an unrecognized not-found page times out into FAILURE — exactly the
-outcome/failure conflation the brief warns about.
+outcome/failure conflation the design forbids.
 
 **Q: The checkpoint is "the Member Details heading is visible." What stops
 replay from returning the wrong member's balance as SUCCESS — say the search
@@ -197,12 +197,11 @@ from day one.
 
 ## Escalation & handoff (as built)
 
-**Q: Your operator console is a bare HTML page with five buttons. Is that the
-handoff the brief asked for?**
+**Q: Your operator console is a bare HTML page with five buttons. Is that a
+real handoff?**
 
-The brief explicitly scopes the console out ("mock the operator UI if needed —
-make the handoff mechanism and the control-transfer model real"). What's real
-here: an engine-owned token with request/acknowledge semantics so two drivers
+The console is deliberately a skin; the control-transfer model is the work.
+What's real here: an engine-owned token with request/acknowledge semantics so two drivers
 on one session is impossible; interventions carrying step, reason, recent
 trace, params, and a screenshot; four attributed exits (take/hand back, approve,
 abort, resolve-as-declared-outcome); TTL expiry that closes the session;
@@ -244,8 +243,8 @@ measured evals — which are the three highest-weighted criteria I hadn't yet
 proven. What stands in for generalization evidence: the drift eval (renamed
 label → loud failure listing every rung tried), per-step rung telemetry in
 every trace, and a schema with no web-specific field outside one flagged rung.
-If the interview wants it demonstrated, the overlay loader plus a divergent
-skin is the first item on the next-steps list, and the schema was shaped so
+To demonstrate it rather than argue it, the overlay loader plus a divergent
+skin is the first item on the roadmap, and the schema was shaped so
 that work is additive.
 
 ## Production storage

@@ -6,7 +6,11 @@ the file.
 
 ## What this is
 
-Record-once / replay-many computer-use automation for legacy UIs with no API.
+Agent Hands: computer-use infrastructure for legacy financial software. AI
+discovers workflows, compiles them into typed capabilities, and production
+executes those capabilities deterministically with explicit safety, evidence
+and failure semantics. The project is Ashish Kosana's; MERIDIAN CORE
+(`web-sample.interface-hiring.com`) is a supplied external target, not ours.
 An LLM works out a task inside a real UI **once** (*discovery*); that run is
 distilled into a typed, versioned **capability artifact** (JSON); production
 invocations **replay** the artifact deterministically — **no model in the
@@ -48,7 +52,7 @@ python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/playwright install chromium
 
-.venv/bin/pytest                      # 85 tests, offline, ~50s (spins the fixture)
+.venv/bin/pytest                      # full suite, offline, a few minutes (spins the fixtures)
 .venv/bin/ruff check .                 # lint (config in pyproject)
 .venv/bin/mypy                         # strict; must stay clean
 .venv/bin/python evals/run_evals.py    # regenerates evals/results.md, offline
@@ -125,8 +129,13 @@ markup, no test IDs, nav iframe; 6 injectable faults via `POST /__faults`).
 `capabilities/` = artifacts + discovery requests. `evidence/` + `evals/` = run
 records and measured results (`evals/twin_results.md` keeps local and live
 twin numbers in separate sections — never sum them). `docs/DESIGN.md` = full design incl.
-considered-and-rejected; `docs/DEFENSE.md` = anticipated hard Qs + honest
-answers; `REPORT.md` = as-built summary.
+considered-and-rejected; `docs/HARD_QUESTIONS.md` = the hardest questions +
+honest answers; `docs/history/REPORT.md` = archived as-built summary (Aug 2026);
+`docs/README.md` = documentation index. Public-facing wording rules: never
+describe a V1 verdict as causal (it is `attribution="window"`); never claim
+exactly-once, live duplicate prevention, or novelty; label MERIDIAN as
+supplied; keep local and live numbers apart; do not hardcode the test count in
+the README (CI is the source of truth).
 
 ## Mental models where the subtlety lives
 
@@ -197,7 +206,7 @@ reconciler, seven chaos modes, local matrix + three live MERIDIAN runs — see
 are pending human risk review (`reviewed_by: null`) — live runs refuse until
 `hands review … --operator <human>`.
 
-**Designed, not built** (see REPORT.md/DEFENSE.md — say so plainly):
+**Designed, not built** (see `docs/HARD_QUESTIONS.md` and the README's Limitations — say so plainly):
 - **Multi-tenant** overlays / variants / drift-telemetry aggregation. What
   exists: per-step rung telemetry, the `fragile` flag, and a drift eval (renamed
   label → loud failure).

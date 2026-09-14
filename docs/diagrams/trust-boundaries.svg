@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 770" width="1200" height="770" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
+  <title>Agent Hands V1 trust boundaries: executor, verifier, reconciler, evidence</title>
+  <desc>Four components with what each may and may not do. The executor and verifier are separate browser sessions; the reconciler is a pure function; every verdict is window attribution, not causal attribution.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#374151"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="770" fill="#ffffff"/>
+
+  <!-- Legacy application -->
+  <rect x="420" y="20" width="360" height="86" rx="8" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.5"/>
+  <text x="600" y="46" text-anchor="middle" font-weight="700" font-size="15" fill="#111827">Legacy application (system of record)</text>
+  <text x="600" y="68" text-anchor="middle" fill="#374151">MERIDIAN CORE &#8212; supplied external target, or the local look-alike fixture</text>
+  <text x="600" y="88" text-anchor="middle" fill="#6b7280" font-style="italic">exposes no API, no transaction id, no per-hold operator</text>
+
+  <!-- Executor session -->
+  <rect x="30" y="170" width="420" height="250" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+  <text x="50" y="196" font-weight="700" font-size="15" fill="#9a3412">Executor session</text>
+  <text x="50" y="215" fill="#7c2d12">own interpreter, own browser context, operator A (supervisor)</text>
+  <text x="50" y="245" font-weight="700" fill="#166534">MAY</text>
+  <text x="50" y="264" fill="#1f2937">&#8226; replay the human-signed mutating artifact</text>
+  <text x="50" y="282" fill="#1f2937">&#8226; issue requests the network allowlist permits</text>
+  <text x="50" y="300" fill="#1f2937">&#8226; log every non-GET it dispatches (kind = session | mutation)</text>
+  <text x="50" y="330" font-weight="700" fill="#991b1b">MAY NOT</text>
+  <text x="50" y="349" fill="#1f2937">&#8226; retry a risky step, ever</text>
+  <text x="50" y="367" fill="#1f2937">&#8226; decide whether an unacknowledged mutation committed &#8594; UNRESOLVED</text>
+  <text x="50" y="385" fill="#1f2937">&#8226; resume at or before the consequential step after a handback</text>
+  <text x="50" y="403" fill="#1f2937">&#8226; call any model during replay (enforced by test)</text>
+
+  <!-- Verifier session -->
+  <rect x="750" y="170" width="420" height="250" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="770" y="196" font-weight="700" font-size="15" fill="#1e3a8a">Verifier session</text>
+  <text x="770" y="215" fill="#1e40af">fresh interpreter, fresh browser context, operator B (teller)</text>
+  <text x="770" y="245" font-weight="700" fill="#166534">MAY</text>
+  <text x="770" y="264" fill="#1f2937">&#8226; replay a read-only artifact (member record page)</text>
+  <text x="770" y="282" fill="#1f2937">&#8226; issue GETs, plus POST to exactly /signon (authentication)</text>
+  <text x="770" y="300" fill="#1f2937">&#8226; return raw observations: status tokens + observed_at</text>
+  <text x="770" y="330" font-weight="700" fill="#991b1b">MAY NOT</text>
+  <text x="770" y="349" fill="#1f2937">&#8226; send any other non-GET &#8212; aborted by ReadOnlyGuard, reported</text>
+  <text x="770" y="367" fill="#1f2937">&#8226; classify or interpret its own observation</text>
+  <text x="770" y="385" fill="#1f2937">&#8226; touch the executor's page, context or cookies</text>
+  <text x="770" y="403" fill="#1f2937">&#8226; read balances or names &#8212; status tokens only</text>
+
+  <!-- Reconciler -->
+  <rect x="270" y="470" width="660" height="170" rx="8" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="290" y="496" font-weight="700" font-size="15" fill="#4c1d95">Reconciler &#8212; pure function, no I/O</text>
+  <text x="290" y="515" fill="#5b21b6">reconcile(expected, pre-image, post-image, executor result) &#8594; Reconciliation</text>
+  <text x="290" y="543" font-weight="700" fill="#166534">MAY</text>
+  <text x="290" y="561" fill="#1f2937">&#8226; emit VERIFIED_COMMITTED &#183; VERIFIED_NOT_COMMITTED &#183; EFFECT_MISMATCH &#183; UNVERIFIABLE</text>
+  <text x="290" y="579" fill="#1f2937">&#8226; stamp attribution = "window", both observed_at timestamps, window length, inputs_sha256</text>
+  <text x="290" y="605" font-weight="700" fill="#991b1b">MAY NOT</text>
+  <text x="290" y="623" fill="#1f2937">&#8226; retry, act, or attribute the transition to this invocation; missing evidence is always UNVERIFIABLE</text>
+
+  <!-- Evidence -->
+  <rect x="30" y="670" width="1140" height="90" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="50" y="694" font-weight="700" font-size="15" fill="#14532d">Evidence bundle (written by the orchestrator, read by anyone)</text>
+  <text x="50" y="714" fill="#1f2937">expected.json &#183; pre.json &#183; executor.json &#183; post.json &#183; reconciliation.json &#183; manifest.json (artifact hashes, SHA-256 of every trace, verify_chain results) &#183; hash-chained trace.jsonl</text>
+  <text x="50" y="734" fill="#374151">Stated bound: the chain is keyless &#8212; tamper-evident, not non-repudiable; the tail seal (trace.tip) sits beside the log, so a receipt kept elsewhere is the real control.</text>
+  <text x="50" y="752" fill="#374151">Not provided: credential independence &#8212; the demo's operators share one password and one privilege model the project does not control.</text>
+
+  <!-- Arrows: sessions to legacy app -->
+  <path d="M 240 170 C 240 130, 380 100, 420 80" fill="none" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="236" y="126" fill="#374151" font-size="12">one consequential mutation (POST)</text>
+  <path d="M 960 170 C 960 130, 820 100, 780 80" fill="none" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="812" y="126" fill="#374151" font-size="12">two read-only observations (pre, post)</text>
+
+  <!-- Arrows: into reconciler -->
+  <path d="M 240 420 L 240 555 L 270 555" fill="none" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="60" y="500" fill="#374151" font-size="12">executor result (masked,</text>
+  <text x="60" y="516" fill="#374151" font-size="12">success | unresolved | failure ...)</text>
+  <path d="M 960 420 L 960 555 L 930 555" fill="none" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="972" y="500" fill="#374151" font-size="12">pre-image, post-image</text>
+  <text x="972" y="516" fill="#374151" font-size="12">(raw observations)</text>
+
+  <!-- Arrow: reconciler to evidence -->
+  <path d="M 600 640 L 600 670" fill="none" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Isolation boundary marker -->
+  <line x1="600" y1="150" x2="600" y2="440" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="6 6"/>
+  <text x="600" y="456" text-anchor="middle" fill="#6b7280" font-size="12" font-style="italic">process + browser-context boundary: no shared page, cookies or memory</text>
+</svg>

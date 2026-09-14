@@ -308,7 +308,7 @@ class ReplayEngine:
                     # the engine has no basis to claim nothing happened. The
                     # caller gets UNRESOLVED, named for the action in doubt,
                     # plus the failure that left it in doubt.
-                    shot, snap = surface.capture_evidence(run_dir)
+                    shot, snap = self._failure_evidence(surface, trace, run_dir, hub)
                     failed.report.screenshot_path = shot
                     failed.report.snapshot_path = snap
                     result = Unresolved(
@@ -327,19 +327,10 @@ class ReplayEngine:
                     )
                     trace.emit("run_finished", result=masked_result(capability, result))
                     return result
-                # No hazard: capture evidence, then attribute. Page-content
-                # evidence is suppressed once a human has driven the session:
-                # what they entered may still sit in page state, and a
-                # screenshot/snapshot would persist it. (Element-level taint
-                # masking would refine suppression to masking.)
-                if hub is not None and (
-                    hub.state is ControlState.HUMAN or hub.human_actions
-                ):
-                    trace.emit("evidence_suppressed_human_window")
-                else:
-                    shot, snap = surface.capture_evidence(run_dir)
-                    failed.report.screenshot_path = shot
-                    failed.report.snapshot_path = snap
+                # No hazard: capture evidence, then attribute.
+                shot, snap = self._failure_evidence(surface, trace, run_dir, hub)
+                failed.report.screenshot_path = shot
+                failed.report.snapshot_path = snap
                 # Blame the allowlist only for traffic blocked DURING the step
                 # (or checkpoint) that failed. Earlier blocks are on the trace
                 # (policy_blocked_requests, above); they did not cause this
@@ -365,7 +356,7 @@ class ReplayEngine:
                 hazard = self._hazard
                 if surface.blocked_requests:
                     trace.emit("policy_blocked_requests", urls=surface.blocked_requests[:10])
-                shot, snap = surface.capture_evidence(run_dir)
+                shot, snap = self._failure_evidence(surface, trace, run_dir, hub)
                 report = FailureReport(
                     step_id=None,
                     intent="drive the browser session",
@@ -412,6 +403,23 @@ class ReplayEngine:
                 self._hub = None
             trace.emit("run_finished", result=masked_result(capability, result))
         return result
+
+    @staticmethod
+    def _failure_evidence(
+        surface: WebSurface, trace: Trace, run_dir: Path, hub: EscalationHub | None
+    ) -> tuple[str | None, str | None]:
+        """Screenshot + accessibility snapshot for a failure report — unless a
+        human has driven this session. Page-content evidence is suppressed
+        once an operator holds or has held control: what they entered may
+        still sit in page state, and a screenshot/snapshot would persist it.
+        The suppression itself is recorded so the receipt shows the evidence
+        is missing on purpose. One decision, used by every failure path
+        (Failure, UNRESOLVED, infrastructure) so they cannot drift apart.
+        (Element-level taint masking would refine suppression to masking.)"""
+        if hub is not None and (hub.state is ControlState.HUMAN or hub.human_actions):
+            trace.emit("evidence_suppressed_human_window")
+            return None, None
+        return surface.capture_evidence(run_dir)
 
     # ------------------------------------------------------------------ flow
 

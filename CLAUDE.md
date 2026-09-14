@@ -125,8 +125,9 @@ markup, no test IDs, nav iframe; 6 injectable faults via `POST /__faults`).
 `capabilities/` = artifacts + discovery requests. `evidence/` + `evals/` = run
 records and measured results (`evals/twin_results.md` keeps local and live
 twin numbers in separate sections — never sum them). `docs/DESIGN.md` = full design incl.
-considered-and-rejected; `docs/DEFENSE.md` = anticipated hard Qs + honest
-answers; `REPORT.md` = as-built summary.
+considered-and-rejected; `docs/HARD_QUESTIONS.md` = the hardest questions +
+honest answers; `docs/history/REPORT.md` = archived as-built summary (Aug 2026);
+`docs/README.md` = documentation index.
 
 ## Mental models where the subtlety lives
 
@@ -197,7 +198,7 @@ reconciler, seven chaos modes, local matrix + three live MERIDIAN runs — see
 are pending human risk review (`reviewed_by: null`) — live runs refuse until
 `hands review … --operator <human>`.
 
-**Designed, not built** (see REPORT.md/DEFENSE.md — say so plainly):
+**Designed, not built** (see `docs/HARD_QUESTIONS.md` and the README's Limitations — say so plainly):
 - **Multi-tenant** overlays / variants / drift-telemetry aggregation. What
   exists: per-step rung telemetry, the `fragile` flag, and a drift eval (renamed
   label → loud failure).

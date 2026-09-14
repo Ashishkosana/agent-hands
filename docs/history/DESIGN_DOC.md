@@ -296,7 +296,7 @@ seam speaks `chat.completions`).
 
 ### References
 - External review brief: "Computer-Use Automation System" (interface.ai, August 2026).
-- `README.md`, `docs/history/REPORT.md`, `docs/DESIGN.md`, `docs/DEFENSE.md`, `CLAUDE.md`.
+- `README.md`, `docs/history/REPORT.md`, `docs/DESIGN.md`, `docs/HARD_QUESTIONS.md` (formerly `DEFENSE.md`), `CLAUDE.md`.
 - `evals/results.md`, `/evidence/`.
 
 ### Decisions Made

@@ -1,7 +1,7 @@
 # Architecture deep-dive — three pillars
 
-Reference notes for the technical review. Every mechanism below is anchored to
-the code that implements it; where a common framing of the problem does **not**
+Code-anchored reference notes on three mechanisms. Every mechanism below is
+anchored to the code that implements it; where a common framing of the problem does **not**
 match this implementation, the difference is stated explicitly rather than
 papered over — the same rule the system itself follows (fail loud, never
 present a confident wrong answer).
@@ -317,8 +317,8 @@ capabilities in, structured results out, no UI knowledge on either side.
 matters more than the name:
 
 - **Zero new dependencies.** Flask was already in the project for the
-  `fixture/` target app. The brief asked for a thin demo surface; adding a
-  second web framework would have been unjustified surface area.
+  `fixture/` target app. The API is a thin demo surface; adding a second web
+  framework would have been unjustified surface area.
 - **Async buys nothing here.** The bottleneck is not I/O concurrency — it is a
   **thread-affine synchronous browser**. An async framework would still
   serialize on the browser, while adding an event-loop/sync-driver hazard.
@@ -425,7 +425,7 @@ front door and provably none in the decision loop."*
 No code path names, reads, intercepts or reconstructs the transaction token;
 there is no request interception and no hand-assembled form payload.
 
-Grep it honestly, because a reviewer will:
+Grep it, because anyone checking the claim will:
 
 ```bash
 rg -nw "_token" src/ tests/ scripts/ fixture/ capabilities/   # → zero matches
@@ -434,8 +434,8 @@ rg -n  "_token" src/                                          # → only prompt_
                                                               #   (LLM usage accounting)
 ```
 
-The bare identifier appears **only in documentation**. If a reviewer asks to see
-the scraper, the correct answer is:
+The bare identifier appears **only in documentation**. If asked to see the
+scraper, the correct answer is:
 
 > "There isn't one — and that's the design. I drive the real control, so the
 > browser serializes the form for me, hidden fields included. Scraping the
@@ -571,7 +571,7 @@ bank can *see*.
 
 ## Appendix A — honest bounds (surfaced by an adversarial review of this document)
 
-These are the limits a reviewer will find if they look, so they are stated
+These are the limits anyone will find if they look, so they are stated
 first. Every one has a known mitigation; none is load-bearing for the safety
 invariants.
 

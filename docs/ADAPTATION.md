@@ -1,11 +1,19 @@
 # Adaptation write-up — agent-hands → MERIDIAN CORE
 
-The take-home built the load-bearing core: an LLM discovers a UI flow once, it is
-distilled into a typed, versioned **capability artifact**, and production
-**replays it deterministically with no model in the loop** (proven hermetically).
-This adaptation points that core at the live legacy target **MERIDIAN CORE**
-(`web-sample.interface-hiring.com`) and wraps it as an invocable API, a chatbot,
-and a dashboard.
+The initial build produced the load-bearing core: an LLM discovers a UI flow
+once, it is distilled into a typed, versioned **capability artifact**, and
+production **replays it deterministically with no model in the loop** (proven
+hermetically). This adaptation points that core at an external legacy target,
+**MERIDIAN CORE**, and wraps it as an invocable API, a chatbot, and a dashboard.
+
+> **What MERIDIAN CORE is.** A hosted demo of a legacy credit-union core
+> banking console (`web-sample.interface-hiring.com`), supplied by a third
+> party as the target system for this work. It was **not built by this
+> project** and is not part of this repository. Everything that drives it —
+> the capabilities under `capabilities/generated/meridian_*.json`, the API,
+> the dashboard, the chatbot, and `fixture/meridian.py` (a local look-alike
+> used for fault-injection evaluation) — is this project's work. The demo is
+> shared with other users and its data changes over time.
 
 ## What adapting actually took
 
@@ -112,8 +120,13 @@ edit/removal/reorder of a record is detected by recomputation; keyless-rewrite
 and tail-truncation limits are documented, with external anchoring as the
 production next step), and risk sign-off is **maker-checker** — discovery
 stamps the recording operator from `HANDS_OPERATOR`, that identity and the
-reviewer's are both bound into the signed hash, and the author of a risky flow
-cannot approve their own steps. The dashboard imports only model-free leaf
+checker's are both bound into the signed hash, and the author of a risky flow
+cannot approve their own steps. Note the limit of the demonstration: the
+committed `meridian_*` artifacts were authored through
+`scripts/build_capabilities.py`, not recorded by a discovery run, so they carry
+no maker identity (`recorded_by: null`) and the dashboard marks them "four-eyes
+not verifiable". The control is enforced and tested; it is exercised end to end
+only on artifacts that discovery recorded. The dashboard imports only model-free leaf
 modules (`hands.artifact`, `hands.trace`; read-only, import-purity verified)
 and reads the already-masked traces. `hands explain <run_id>` reconstructs any
 run into an examiner-grade **audit receipt**: capability + version + contract

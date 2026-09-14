@@ -10,6 +10,10 @@ P4  Surface / Playwright infrastructure exceptions are contained inside the
     six-way contract (typed Failure, or UNRESOLVED when a hazard exists).
 P5  Per-run attribution is reset before the risk gate can refuse a run.
 
+Plus the PR #12 review fixes: R-F1 human-window evidence privacy on every
+failure path, R-F2/R-F3 receipt wording that separates "locally sealed",
+"matches the receipt" and "locally broken", R-F4 trace.tip is not evidence.
+
 Every test here is hermetic: the Fairview fixture app or a stub. No live
 MERIDIAN operations.
 """
@@ -26,8 +30,9 @@ import pytest
 from hands.api import create_api
 from hands.artifact import Capability
 from hands.cli import main as cli_main
-from hands.replay import EngineConfig, ReplayEngine, _Hazard
-from hands.results import Failure, PolicyViolation, Success, Unresolved
+from hands.escalation import ControlState, EscalationHub
+from hands.replay import EngineConfig, EscalationSettings, ReplayEngine, _Hazard, _StepFailed
+from hands.results import Failure, FailureReport, PolicyViolation, Success, Unresolved
 from hands.surface import PlaywrightError, SurfaceError, WebSurface
 from hands.trace import TIP_FILE, Trace, chain_tip, is_sealed, verify_chain
 from tests.conftest import _free_port, set_fault
@@ -252,10 +257,14 @@ class TestP2SealedTraceTail:
         assert "SEALED" in out and "UNSEALED" not in out and "BROKEN" not in out
 
         out = explain(sealed, "--expect-tip", str(chain_tip(sealed)))
-        assert "RECONCILED" in out
+        assert "RECONCILED" in out and "local seal file present" in out
+        assert "BROKEN" not in out
 
+        # R-F3: a receipt that does not match an INTACT local log is not
+        # evidence of tampering — the caller may hold the wrong receipt.
         out = explain(sealed, "--expect-tip", "0" * 64)
-        assert "BROKEN" in out
+        assert "INTACT, but does not match the supplied receipt" in out
+        assert "BROKEN" not in out
 
         unsealed = _write_run(tmp_path, "unsealed")
         (unsealed / TIP_FILE).unlink()
@@ -267,7 +276,45 @@ class TestP2SealedTraceTail:
         lines = path.read_text().splitlines()
         path.write_text("\n".join(lines[:-1]) + "\n")
         out = explain(broken)
-        assert "BROKEN" in out
+        assert "BROKEN" in out and "local chain/seal verification failed" in out
+        # A wrong receipt on a broken log is still reported as BROKEN, not as
+        # a receipt mismatch: local corruption takes precedence.
+        out = explain(broken, "--expect-tip", "0" * 64)
+        assert "BROKEN" in out and "does not match the supplied receipt" not in out
+
+    def test_rf2_matching_receipt_on_an_unsealed_run_is_not_called_sealed(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """R-F2: the receipt matches but no local seal exists. Report both
+        facts; never say the directory is SEALED."""
+        run_dir = _write_run(tmp_path, "receipt_only")
+        tip = chain_tip(run_dir)
+        assert tip is not None
+        (run_dir / TIP_FILE).unlink()
+        cli_main(
+            ["explain", run_dir.name, "--runs-dir", str(tmp_path), "--gen-dir",
+             str(ARTIFACT_DIR), "--expect-tip", tip]
+        )
+        out = capsys.readouterr().out
+        audit_line = next(ln for ln in out.splitlines() if "Audit log:" in ln)
+        assert "INTACT" in audit_line
+        assert "RECONCILED against supplied receipt" in audit_line
+        assert f"local seal file ({TIP_FILE}) absent" in audit_line
+        assert "SEALED" not in audit_line.replace("UNSEALED", "")
+        assert "BROKEN" not in audit_line
+
+    def test_rf4_trace_tip_is_not_listed_as_evidence(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        run_dir = _write_run(tmp_path, "with_evidence")
+        (run_dir / "failure.png").write_bytes(b"\x89PNG")
+        assert (run_dir / TIP_FILE).exists()
+        cli_main(["explain", run_dir.name, "--runs-dir", str(tmp_path), "--gen-dir",
+                  str(ARTIFACT_DIR)])
+        out = capsys.readouterr().out
+        evidence_line = out.splitlines()[out.splitlines().index(" -- Evidence --") + 1]
+        assert "failure.png" in evidence_line
+        assert TIP_FILE not in evidence_line and "trace.jsonl" not in evidence_line
 
     def test_p2_dashboard_reports_three_log_states(self, tmp_path: Path) -> None:
         from dashboard.app import _summarize_run
@@ -495,3 +542,141 @@ def test_p5_reset_does_not_erase_state_the_current_run_established(
     assert isinstance(result, Success)
     assert eng.last_run_dir is not None and eng.last_run_dir != tmp_path / "stale"
     assert eng.last_run_dir.parent == tmp_path / "runs"
+
+
+# ------------------------------------------------------------ R-F1 (PR #12)
+
+
+def _attended(tmp_path: Path) -> ReplayEngine:
+    return ReplayEngine(
+        EngineConfig(
+            runs_dir=tmp_path / "runs",
+            escalation=EscalationSettings(ttl_s=1.0, console_port=0),
+        )
+    )
+
+
+def _human_typed_something(hub: EscalationHub) -> None:
+    """Simulate a completed human-control window: the operator took over,
+    typed into the page, and handed control back."""
+    hub.state = ControlState.PAUSED
+    assert hub.take("operator-1")
+    assert hub.record_human_action({"kind": "type", "label": "Social Security Number"})
+    hub.resume_automation()
+    assert hub.state is ControlState.AUTOMATION and hub.human_actions
+
+
+def _page_evidence(run_dir: Path) -> list[str]:
+    return sorted(p.name for p in run_dir.iterdir() if p.suffix in (".png", ".txt"))
+
+
+def _trace_events(run_dir: Path) -> list[str]:
+    return [json.loads(ln)["event"] for ln in (run_dir / "trace.jsonl").read_text().splitlines()]
+
+
+def test_rf1_human_action_then_infrastructure_failure_captures_no_page_evidence(
+    capability: Capability, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The reviewer's reproduction: attended run + recorded human action +
+    PlaywrightError wrote failure.png / failure-a11y.txt. It must not."""
+
+    def human_then_browser_dies(self: ReplayEngine, *args: Any, **kwargs: Any) -> Any:
+        assert self._hub is not None
+        _human_typed_something(self._hub)
+        raise PlaywrightError("Target page, context or browser has been closed")
+
+    monkeypatch.setattr(ReplayEngine, "_execute", human_then_browser_dies)
+    eng = _attended(tmp_path)
+    result = eng.run(capability, {"member_id": "12345"})
+    assert isinstance(result, Failure), result
+    assert result.report.step_id is None
+    assert result.report.screenshot_path is None and result.report.snapshot_path is None
+    assert eng.last_run_dir is not None
+    assert _page_evidence(eng.last_run_dir) == []
+    events = _trace_events(eng.last_run_dir)
+    assert "evidence_suppressed_human_window" in events  # suppressed on purpose, on record
+    assert "surface_unavailable" in events
+
+
+def test_rf1_human_action_then_post_hazard_failure_is_unresolved_without_page_evidence(
+    capability: Capability, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """V1's UNRESOLVED path had the same gap. Closing it must not touch the
+    verdict: hazard + later failure is still UNRESOLVED."""
+
+    def human_then_hazard_then_fail(self: ReplayEngine, *args: Any, **kwargs: Any) -> Any:
+        assert self._hub is not None
+        _human_typed_something(self._hub)
+        self._hazard = _Hazard(step_id="s7", intent="place hold", requests=("POST /hold",))
+        raise _StepFailed(
+            FailureReport(
+                step_id="s8", intent="read the acknowledgement",
+                expected="confirmation number", observed="page went blank",
+            )
+        )
+
+    monkeypatch.setattr(ReplayEngine, "_execute", human_then_hazard_then_fail)
+    eng = _attended(tmp_path)
+    result = eng.run(capability, {"member_id": "12345"})
+    assert isinstance(result, Unresolved), result
+    assert result.step_id == "s7" and result.dispatched is True
+    assert result.report.step_id == "s8"
+    assert result.report.screenshot_path is None and result.report.snapshot_path is None
+    assert eng.last_run_dir is not None
+    assert _page_evidence(eng.last_run_dir) == []
+    events = _trace_events(eng.last_run_dir)
+    assert "evidence_suppressed_human_window" in events
+    assert "unresolved" in events
+
+
+def test_rf1_human_action_then_ordinary_step_failure_captures_no_page_evidence(
+    capability: Capability, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The pre-existing Failure path, re-asserted through the shared helper."""
+
+    def human_then_fail(self: ReplayEngine, *args: Any, **kwargs: Any) -> Any:
+        assert self._hub is not None
+        _human_typed_something(self._hub)
+        raise _StepFailed(
+            FailureReport(step_id="s2", intent="submit", expected="results", observed="nothing")
+        )
+
+    monkeypatch.setattr(ReplayEngine, "_execute", human_then_fail)
+    eng = _attended(tmp_path)
+    result = eng.run(capability, {"member_id": "12345"})
+    assert isinstance(result, Failure), result
+    assert result.report.screenshot_path is None and result.report.snapshot_path is None
+    assert eng.last_run_dir is not None
+    assert _page_evidence(eng.last_run_dir) == []
+    assert "evidence_suppressed_human_window" in _trace_events(eng.last_run_dir)
+
+
+def test_rf1_ordinary_unattended_failure_still_captures_evidence(
+    capability: Capability, fixture_app: str, tmp_path: Path
+) -> None:
+    """No human in the loop: failure evidence is captured as before."""
+    set_fault(fixture_app, "renamed_label", True)
+    eng = engine(tmp_path)
+    result = eng.run(capability, {"member_id": "12345"})
+    assert isinstance(result, Failure), result
+    assert result.report.screenshot_path is not None and result.report.snapshot_path is not None
+    assert eng.last_run_dir is not None
+    assert _page_evidence(eng.last_run_dir) == ["failure-a11y.txt", "failure.png"]
+    assert "evidence_suppressed_human_window" not in _trace_events(eng.last_run_dir)
+
+
+def test_rf1_attended_run_without_human_action_still_captures_evidence(
+    capability: Capability, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Attended mode alone does not suppress: only a human-driven window does."""
+
+    def browser_dies(self: ReplayEngine, *args: Any, **kwargs: Any) -> Any:
+        raise PlaywrightError("Target page, context or browser has been closed")
+
+    monkeypatch.setattr(ReplayEngine, "_execute", browser_dies)
+    eng = _attended(tmp_path)
+    result = eng.run(capability, {"member_id": "12345"})
+    assert isinstance(result, Failure), result
+    assert result.report.screenshot_path is not None  # the page is still up in this scenario
+    assert eng.last_run_dir is not None
+    assert "evidence_suppressed_human_window" not in _trace_events(eng.last_run_dir)

@@ -149,7 +149,7 @@ def _explain(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     import hashlib
 
     from hands.artifact import dump_capability, risk_review_valid, same_operator
-    from hands.trace import is_chained, is_sealed, verify_chain
+    from hands.trace import TIP_FILE, is_chained, is_sealed, verify_chain
 
     run_dir = args.runs_dir / args.run_id
     trace_file = run_dir / "trace.jsonl"
@@ -212,13 +212,32 @@ def _explain(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     # the anchor if the caller kept one. An UNSEALED run must not render as
     # "intact": the seal lives beside the log, so a deleted seal and a clean
     # run look identical to the chain check alone.
+    #
+    # Three separate facts, reported separately: does the LOCAL chain (+ seal,
+    # if present) verify; is a local seal file present at all; and, when a
+    # receipt was supplied, does it match. Only a failure of the local check
+    # is called BROKEN — a receipt that does not match an intact log may just
+    # be the wrong receipt, and a matching receipt does not make an unsealed
+    # directory "sealed".
     if is_chained(run_dir):
-        ok = verify_chain(run_dir, expected_tip=args.expect_tip)
-        if not ok:
-            chain = "TAMPER-EVIDENT: BROKEN — the log was modified after the run"
+        local_ok = verify_chain(run_dir)
+        sealed = is_sealed(run_dir)
+        seal_note = "local seal file present" if sealed else f"local seal file ({TIP_FILE}) absent"
+        if not local_ok:
+            chain = (
+                "TAMPER-EVIDENT: BROKEN — the log was modified after the run "
+                f"(local chain/seal verification failed; {seal_note})"
+            )
         elif args.expect_tip:
-            chain = "TAMPER-EVIDENT: SEALED, intact and RECONCILED against the receipt you supplied"
-        elif is_sealed(run_dir):
+            if verify_chain(run_dir, expected_tip=args.expect_tip):
+                chain = f"TAMPER-EVIDENT: INTACT; RECONCILED against supplied receipt; {seal_note}"
+            else:
+                chain = (
+                    "TAMPER-EVIDENT: INTACT, but does not match the supplied receipt — "
+                    f"either the wrong receipt was supplied or the run was replaced "
+                    f"wholesale; {seal_note}"
+                )
+        elif sealed:
             chain = (
                 "TAMPER-EVIDENT: SEALED and intact (chain + seal verify; supply --expect-tip "
                 "from the invoke envelope to rule out a rewritten seal)"
@@ -269,7 +288,8 @@ def _explain(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
             "", " -- Result --",
             f" {json.dumps((finished or {}).get('result', {}))}",
             "", " -- Evidence --"]
-    ev_files = sorted(p.name for p in run_dir.iterdir() if p.name != "trace.jsonl")
+    # The audit log and its seal are the receipt's own machinery, not evidence.
+    ev_files = sorted(p.name for p in run_dir.iterdir() if p.name not in ("trace.jsonl", TIP_FILE))
     out.append(" " + (", ".join(ev_files) if ev_files else "none (clean run)"))
     out.append(bar)
     print("\n".join(out))

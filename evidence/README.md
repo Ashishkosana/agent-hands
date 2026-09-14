@@ -1,7 +1,18 @@
 # Evidence
 
-End-to-end proof of the core loop, captured 2026-08-14 against the local
-Fairview Teller fixture app. All data is fake seed data.
+Curated run records. Transient output from every run goes to the gitignored
+`runs/`; the directories here were copied from it unchanged and are the
+records the README and the eval reports point at.
+
+| directory | target | what |
+|---|---|---|
+| this directory | local Fairview fixture | the core loop: discovery transcripts, the artifact they produced, deterministic replays, a live human handoff (below) |
+| [`twin/`](twin/README.md) | local MERIDIAN-shaped fixture and the supplied MERIDIAN CORE demo | V1 outcome-verification bundles, one per chaos scenario plus the three live runs |
+
+## Core loop — local Fairview fixture
+
+Captured 2026-08-14 against the local Fairview Teller fixture app authored in
+this repository. All data is fake seed data.
 
 | file | what it shows |
 |---|---|

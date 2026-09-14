@@ -75,10 +75,11 @@ deterministic replay, explicit failure semantics, and evidence for every run.
 
 ## Project status
 
-Research prototype, tagged
-[`v0.2.0-verifier`](https://github.com/Ashishkosana/agent-hands/releases/tag/v0.2.0-verifier).
-Not for use against production banking systems. The table is the honest line
-between built, demonstrated, and designed.
+Research prototype. The independently reviewed V1 checkpoint is tagged
+[`v0.2.0-verifier`](https://github.com/Ashishkosana/agent-hands/releases/tag/v0.2.0-verifier);
+`main` additionally carries the post-V1 hardening merged after its own
+independent review. Not for use against production banking systems. The
+table is the honest line between built, demonstrated, and designed.
 
 | component | scope | state |
 |---|---|---|
@@ -88,11 +89,12 @@ between built, demonstrated, and designed.
 | Six-way result contract incl. `UNRESOLVED` for consequential steps | all | **Built**, tested |
 | Policy: network allowlist, hash-bound human risk review, risky steps never auto-retried | all | **Built**, tested |
 | Human escalation: control token, operator console, live-session handoff, resume scan, TTL fail-safe | fixture (evidence committed); MERIDIAN (exercised, not committed as traces) | **Built**, tested |
-| Hash-chained traces, `verify_chain`, `hands explain` audit receipt | all | **Built**, tested; bounds stated below |
+| Hash-chained traces sealed at close (`trace.tip`), `verify_chain`, `hands explain` audit receipt | all | **Built**, tested; bounds stated below |
 | Maker-checker (four-eyes) on risk sign-off | all | **Built**, tested; not demonstrated on the committed `meridian_*` artifacts (no recorded maker) |
 | Capability API, trust dashboard, chatbot console | MERIDIAN CORE, Fairview | **Built** (demo surfaces) |
 | Seven MERIDIAN capabilities: sign-on, lookup by number/surname, inquiry, transfer, new share, contact update, account hold | MERIDIAN CORE (supplied external target) | **Built and signed**; exercised live during development; live traces not committed except for V1 (below) |
 | V1 outcome verification: read-only verifier, pure reconciler, chaos seam, twin evaluation | `meridian_place_hold` + `meridian_member_record`, local look-alike fixture + 3 live runs | **Built**, independently reviewed; twin artifacts pending human risk review |
+| Post-V1 hardening: idempotency check → execute → record as one critical section; trace tail sealed and reported as sealed / unsealed / broken; `audit_chain_tip` in the API envelope, `hands explain --expect-tip`; infrastructure errors contained inside the six-way contract; step-scoped allowlist blame; failure evidence suppressed on every failure path once a human has driven the session | all | **Built**, independently reviewed and merged; payload-bound and restart-durable idempotency remain open |
 | Desktop surface (UIA/AX), multi-tenant overlays, drift telemetry aggregation | — | **Designed, not built** |
 | Causal attribution of an observed transition to a specific invocation | — | **Not built** (research problem, see roadmap) |
 
@@ -168,9 +170,20 @@ dispatched.
 **Evidence, with its bounds stated.** Every run writes an append-only,
 hash-chained JSONL trace with secrets masked; `verify_chain` detects any
 edit, removal or reordering of a record, and `hands explain <run_id>` rebuilds
-the run into an audit receipt. The chain is keyless: it is tamper-evident, not
-non-repudiable, and truncating the tail is undetectable without an external
-anchor. Those are the documented production next steps, not hidden gaps.
+the run into an audit receipt. A chain cannot pin its own last record, so
+closing a run seals the record count and tip hash into `trace.tip`, and the
+same tip leaves the run directory as `audit_chain_tip` in the API envelope.
+`hands explain` reports three states rather than a binary — **SEALED**
+(chain and seal verify), **UNSEALED** (chain verifies, final record
+unpinned; never rendered as intact) and **BROKEN** (local verification
+failed) — and `--expect-tip <audit_chain_tip>` reconciles the run against a
+receipt held elsewhere. Two distinctions are kept deliberately: a receipt
+that matches does not by itself mean a local seal exists, and a receipt that
+does not match an otherwise intact log is reported as a receipt mismatch, not
+as local corruption. The chain is keyless: it is tamper-evident, not
+non-repudiable, and an adversary who can rewrite both files can forge a
+consistent pair for anyone who kept no anchor. Those are the documented
+production next steps, not hidden gaps.
 
 **Zero model calls in production is tested, not asserted.**
 `tests/test_zero_llm.py` replays in a fresh subprocess with every key-shaped
@@ -224,8 +237,10 @@ with no ground-truth endpoint; "truth" there is what the independent
 verifier read, and the verdict is window attribution only.
 
 Test suite at the checkpoint: **159 / 159** passing, `ruff` clean, strict
-`mypy` clean. The count is not repeated elsewhere in this README so it does
-not go stale; CI is the source of truth.
+`mypy` clean. Current `main`, after the independently reviewed post-V1
+hardening merge: **187** automated tests, same lint and typing bar. Neither
+count is repeated elsewhere in this README so it does not go stale; CI is the
+source of truth.
 
 ## Ambiguous outcomes (V1)
 
@@ -305,8 +320,10 @@ Trust boundaries between the components:
 ![Trust boundaries: executor session, verifier session, reconciler, evidence](docs/diagrams/trust-boundaries.svg)
 
 **What V1 does not claim.** Exactly-once execution. Causal attribution.
-Duplicate prevention on a live system. Race-free or persistent idempotency at
-the API (the in-memory key check is documented as a known gap). Novelty —
+Duplicate prevention on a live system. Payload-bound or restart-durable
+idempotency at the API (the concurrent same-key race was closed after V1;
+the key still does not bind the request payload and the completed map is
+in-memory). Novelty —
 [`docs/PRIOR_ART.md`](docs/PRIOR_ART.md) lists the established work this
 builds on and states the narrow part that appears less well covered. Credential
 independence — the demo's operators share one password and privilege model.
@@ -356,7 +373,8 @@ curl -s -X POST -H "Content-Type: application/json" \
 # Human handoff: run attended, then open http://127.0.0.1:8321/ as the operator
 .venv/bin/hands replay $A --param member_id=12345 --attended
 
-# Rebuild any run into an audit receipt
+# Rebuild any run into an audit receipt; add --expect-tip <audit_chain_tip>
+# to reconcile it against the receipt an API invoke envelope returned
 .venv/bin/hands explain <run_id>
 ```
 
@@ -377,7 +395,7 @@ HANDS_APP=fairview-teller .venv/bin/python -m dashboard.app --port 8200
 
 <p align="center">
   <img src="docs/screenshots/dashboard-run-history.png" alt="Trust dashboard: run history with trust chips" width="900">
-  <br><sub><b>Built by this project.</b> The trust dashboard (cropped) after eight replays against the <b>local Fairview fixture</b>: success, business outcomes, two recovered faults, and one stopped-safely UI-drift run. Chips are computed from the hash-chained trace. The amber "four-eyes not verifiable" chip is honest: this artifact has no recorded maker.</sub>
+  <br><sub><b>Built by this project.</b> The trust dashboard (cropped) after eight replays against the <b>local Fairview fixture</b>: success, business outcomes, two recovered faults, and one stopped-safely UI-drift run. Chips are computed from the hash-chained trace. The amber "four-eyes not verifiable" chip is honest: this artifact has no recorded maker. Captured before trace sealing landed; on current <code>main</code> the log chip reads sealed / unsealed / broken instead of a binary check.</sub>
 </p>
 
 <p align="center">
@@ -414,40 +432,49 @@ the gitignored `runs/`. Each directory is indexed in
 | `evidence/twin/local/<scenario>/` | one representative V1 bundle per chaos scenario: `expected/pre/executor/post/reconciliation/manifest.json` plus hash-chained traces |
 | `evidence/twin/live/` | the three live MERIDIAN CORE twin runs |
 
-An audit receipt, as `hands explain` prints it for the recovered run shown in
-the dashboard above:
+An audit receipt, as `hands explain` prints it for a session-expiry run that
+recovered. The run was invoked through the API, whose envelope returned
+`audit_chain_tip`; that tip is handed back here with `--expect-tip`, so the
+receipt is reconciled against an anchor held outside the run directory:
 
 ```
 ==============================================================
- AUDIT RECEIPT  ·  20260914T055600Z-lookup_member_balance-bad76e
+ AUDIT RECEIPT  ·  20260914T072240Z-lookup_member_balance-5ff227
 ==============================================================
  Capability:      lookup_member_balance  v1
  Contract hash:   66d3c5a36c548588d345355ac660f50dbd0b6cba8eb8042618689b66d4715c2b
  Contract status: VERIFIED — byte-identical to the artifact on disk
  Risk sign-off:   signed by 'ashish' (valid)
  Maker / Checker: recorded by '(not recorded)' / approved by 'ashish' (maker unknown -- four-eyes not bindable)
- Audit log:       TAMPER-EVIDENT: intact (hash chain verifies)
+ Audit log:       TAMPER-EVIDENT: INTACT; RECONCILED against supplied receipt; local seal file present
  Inputs (masked): {'member_id': '12345'}
 
  -- Decision trace --
-  05:56:00.760  STEP s1  Enter the member ID in the search field  (safe)
-  05:56:00.763  [!] recognized None -- Session Expired
-  05:56:01.082  STEP s1  Enter the member ID in the search field  (safe)
-  05:56:01.138       -> acted (type) via relative:nearest_input_right of (text='Member ID')
-  05:56:01.140       ok verified
-  05:56:01.140  STEP s2  Submit the member search  (safe)
-  05:56:01.192       -> acted (click) via role=button name='Search'
-  05:56:01.721       ok verified
-  05:56:01.730  CHECKPOINT ok -- confirmed the right record
-  05:56:01.773  OUTPUT savings_balance = «masked»
+  07:22:40.622  STEP s1  Enter the member ID in the search field  (safe)
+  07:22:40.625  [!] recognized None -- Session Expired
+  07:22:41.205  STEP s1  Enter the member ID in the search field  (safe)
+  07:22:41.261       -> acted (type) via relative:nearest_input_right of (text='Member ID')
+  07:22:41.262       ok verified
+  07:22:41.262  STEP s2  Submit the member search  (safe)
+  07:22:41.305       -> acted (click) via role=button name='Search'
+  07:22:41.837       ok verified
+  07:22:41.850  CHECKPOINT ok -- confirmed the right record
+  07:22:41.908  OUTPUT savings_balance = «masked»
 
  -- Determinism --
  Model/LLM events in this run: 0  ->  NO model in the decision loop
 
  -- Result --
  {"result": "success", "outputs": {"savings_balance": "«masked»"}}
+
+ -- Evidence --
+ none (clean run)
 ==============================================================
 ```
+
+Without `--expect-tip` the same run reports `SEALED and intact`; a run whose
+`trace.tip` is missing reports `UNSEALED`; a wrong tip against this intact
+log reports a receipt mismatch rather than `BROKEN`.
 
 ## Repository map
 
@@ -459,9 +486,9 @@ the dashboard above:
 | `src/hands/conditions.py` · `values.py` · `results.py` | sensors, strict value parsing, the six-way result union |
 | `src/hands/planner.py` · `recorder.py` · `discover.py` | the LLM discovery loop and live-verified distillation (the only modules that import a model client) |
 | `src/hands/escalation.py` | control-token state machine and minimal operator console |
-| `src/hands/trace.py` | hash-chained JSONL tracing and `verify_chain` |
+| `src/hands/trace.py` | hash-chained JSONL tracing, the `trace.tip` seal written at close, `verify_chain` / `is_sealed` / `chain_tip` |
 | `src/hands/verifier.py` · `reconcile.py` · `twin.py` · `chaos.py` | V1: read-only observer, pure reconciler, twin orchestrator, fault injection |
-| `src/hands/api.py` · `cli.py` | capability API (`/capabilities/<name>/invoke`) and the `hands` CLI (`replay`, `review`, `discover`, `explain`) |
+| `src/hands/api.py` · `cli.py` | capability API (`/capabilities/<name>/invoke`, idempotency key, `audit_chain_tip` in the envelope) and the `hands` CLI (`replay`, `review`, `discover`, `explain [--expect-tip]`) |
 | `dashboard/` · `chatbot/` | read-only trust dashboard; plain-English front door that routes to the API (never to replay) |
 | `fixture/app.py` · `fixture/meridian.py` | the Fairview fixture; the MERIDIAN look-alike with a ground-truth endpoint for chaos evals |
 | `capabilities/` | signed artifacts (`generated/`), the authored demo artifact, discovery requests |
@@ -550,17 +577,33 @@ computer-use paths when the legacy application exposes no API at all.
   them.
 - **Twin artifacts pending human review.** Live twin runs refuse until a
   human signs `meridian_place_hold` and `meridian_member_record`.
-- **Evidence chain is keyless.** Tamper-evident, not non-repudiable; tail
-  truncation is undetectable without an external anchor.
+- **Evidence chain is keyless.** Tamper-evident, not non-repudiable. The
+  `trace.tip` seal pins the tail, but it sits beside the log it protects, so
+  an adversary who can rewrite both files can forge a consistent pair; only a
+  receipt kept elsewhere (`audit_chain_tip`) detects that, and nothing in the
+  repository stores such receipts. A matching receipt does not imply a local
+  seal exists; a mismatching receipt on an intact log is a receipt mismatch,
+  not proof of local corruption.
 - **Discovery redaction is containment, not elimination.** Parameters never
   enter prompts and password fields are masked, but page-native PII on a real
   system would reach the model during the one discovery run.
 - **The shared live demo is not isolated.** Local twin runs reset the fixture
   between runs; live runs cannot, which is one more reason live verdicts are
   window-scoped.
-- **The API's idempotency key is an in-memory check** with a documented
-  time-of-check/time-of-use gap and no payload binding; treat it as a demo
-  guard, not a guarantee.
+- **The API's idempotency key is an in-memory demo guard.** The
+  time-of-check/time-of-use race is closed: the completed-key check, the
+  run and the record are one critical section, so two concurrent requests
+  with the same key execute once and the second receives the replayed
+  envelope. Still open: the key is not bound to the request payload, so a
+  reused key with different parameters replays the first result, and the
+  completed map does not survive a restart.
+- **Human-window evidence suppression has a known residual.** Terminal
+  failure evidence (screenshot and snapshot) is now suppressed on every
+  failure path once an operator has driven the session. The intervention
+  screenshot raised by a *later* escalation in the same run, after a prior
+  human window, is still captured in `_maybe_escalate` and can persist
+  operator-entered page content. Follow-up hardening item, tracked in the
+  roadmap; element-level taint masking is the refinement.
 - **The operator console is a skin.** The control-transfer model is the work.
 
 ## Research roadmap
@@ -587,7 +630,12 @@ In progress or planned; nothing below exists yet.
 - **Second surface and second tenant.** A desktop (UIA/AX) `Surface` and an
   overlay loader with a structurally divergent skin, to turn the heterogeneity
   design into evidence.
-- **External anchoring** of the trace chain and per-operator signing keys.
+- **Anchoring beyond the envelope.** A receipt store the caller does not
+  control, an HMAC-keyed chain, and per-operator signing keys; today the tip
+  travels only as far as the API envelope.
+- **Hardening backlog.** Payload-bound and restart-durable idempotency at
+  the API; suppressing (or taint-masking) the intervention screenshot raised
+  after a prior human window.
 
 ## Authorship, tooling and license
 
